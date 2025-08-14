@@ -26,9 +26,9 @@ console.log('DEBUG ID len:', AMADEUS_ID.length);
 console.log('DEBUG SECRET len:', AMADEUS_SECRET.length);
 
 if (!AMADEUS_ID || !AMADEUS_SECRET) {
-  console.error('❌ Falta AMADEUS_CLIENT_ID o AMADEUS_CLIENT_SECRET en .env');
-  process.exit(1);
+  console.error('❌ Faltan variables Amadeus. Servidor arrancará pero /api fallará.');
 }
+
 
 const amadeus = new Amadeus({
   clientId: AMADEUS_ID,
@@ -165,3 +165,9 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
 });
+// ----------------- Arranque -----------------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Servidor corriendo en 0.0.0.0:${PORT}`);
+});
+
