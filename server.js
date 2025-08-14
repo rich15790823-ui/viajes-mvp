@@ -57,6 +57,22 @@ app.get('/api/vuelos', async (req, res) => {
     const date = (req.query.date || '').trim();
     const adults = Number(req.query.adults || 1);
     const currency = (req.query.currency || 'USD').toUpperCase().trim();
+// Nuevo: fecha de regreso
+const returnDate = (req.query.returnDate || '').trim();
+
+if (returnDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) {
+    return res.status(400).json({
+      error: 'Parámetro "returnDate" inválido. Formato YYYY-MM-DD (ej. 2025-09-10).'
+    });
+  }
+  if (new Date(returnDate) < new Date(date)) {
+    return res.status(400).json({
+      error: '"returnDate" no puede ser antes de "date".'
+    });
+  }
+}
+
 
     // Validaciones
     if (!/^[A-Z]{3}$/.test(origin)) {
@@ -73,7 +89,8 @@ app.get('/api/vuelos', async (req, res) => {
     }
 
     // Caché
-    const cacheKey = JSON.stringify({ origin, destination, date, adults, currency });
+    const cacheKey = JSON.stringify({ origin, destination, date, returnDate, adults, currency });
+
     const cached = cache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
       console.log('🟢 Cache HIT');
@@ -85,15 +102,14 @@ app.get('/api/vuelos', async (req, res) => {
     console.log('🟡 Llamando a Amadeus...');
     const response = await withTimeout(
       amadeus.shopping.flightOffersSearch.get({
-        originLocationCode: origin,
-        destinationLocationCode: destination,
-        departureDate: date,
-        adults,
-        currencyCode: currency,
-        max: 10
-      }),
-      15000
-    );
+  originLocationCode: origin,
+  destinationLocationCode: destination,
+  departureDate: date,
+  returnDate: returnDate || undefined, // ← Solo se manda si existe
+  adults,
+  currencyCode: currency,
+  max: 10
+}),
     console.log('🟢 Amadeus respondió');
 
     const dict = response.result?.dictionaries || {};

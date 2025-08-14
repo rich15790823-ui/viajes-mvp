@@ -5,26 +5,28 @@
   <title>Buscador de Vuelos (MVP)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    /* Fuerza tema claro y tipografía legible */
-    html, body { background:#ffffff; color:#111111; }
+    html, body { background:#fff; color:#111; }
     body { font-family: system-ui, -apple-system, Arial, sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; }
     h1 { margin: 0 0 8px; }
-    .hint { color: #444; font-size: 12px; margin-bottom: 16px; }
-    form { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; align-items: end; }
-    label { display: block; font-size: 12px; margin-bottom: 6px; color:#222; }
-    input, select, button { padding: 10px; font-size: 14px; width: 100%; box-sizing: border-box; border-radius:10px; }
+    .hint { color:#444; font-size:12px; margin-bottom:16px; }
+    form { display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:12px; align-items:end; }
+    label { display:block; font-size:12px; margin-bottom:6px; color:#222; }
+    input, select, button { padding:10px; font-size:14px; width:100%; box-sizing:border-box; border-radius:10px; }
     input, select { background:#fff; color:#111; border:1px solid #ccc; }
-    input:focus, select:focus { outline: none; border-color:#888; }
-    button { cursor: pointer; background:#111; color:#fff; border:0; }
-    .row-full { grid-column: 1 / -1; }
-    #msg { margin-top: 10px; min-height: 20px; font-size: 14px; }
-    .error { color: #b00020; }
-    .ok { color: #117a00; }
-    .muted { color: #666; font-size: 12px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 16px; background:#fff; }
-    th, td { border: 1px solid #ccc; padding: 10px; font-size: 14px; text-align: left; vertical-align: top; }
-    th { background: #eee; color:#111; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color:#444; }
+    input:focus, select:focus { outline:none; border-color:#888; }
+    button { cursor:pointer; background:#111; color:#fff; border:0; }
+    .row-full { grid-column:1 / -1; }
+    #msg { margin-top:10px; min-height:20px; font-size:14px; }
+    .error { color:#b00020; }
+    .ok { color:#117a00; }
+    .muted { color:#666; font-size:12px; }
+    table { width:100%; border-collapse:collapse; margin-top:16px; background:#fff; }
+    th, td { border:1px solid #ccc; padding:10px; font-size:14px; text-align:left; vertical-align:top; }
+    th { background:#eee; color:#111; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; color:#444; }
+    .details { background:#fafafa; }
+    .details td { border-top:0; border-bottom:1px solid #ddd; }
+    .details pre { margin:8px 0 0; white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; color:#444; }
   </style>
 </head>
 <body>
@@ -44,6 +46,18 @@
       <label for="date">Fecha (YYYY-MM-DD)</label>
       <input id="date" name="date" value="2025-09-01" />
     </div>
+
+    <!-- NUEVO: Ida y vuelta + Regreso -->
+    <div>
+      <label for="roundTrip">Ida y vuelta</label>
+      <input id="roundTrip" name="roundTrip" type="checkbox" />
+    </div>
+    <div id="returnDateWrap" style="display:none;">
+      <label for="returnDate">Regreso (YYYY-MM-DD)</label>
+      <input id="returnDate" name="returnDate" placeholder="2025-09-10" />
+    </div>
+    <!-- /NUEVO -->
+
     <div>
       <label for="adults">Adultos</label>
       <input id="adults" name="adults" type="number" min="1" value="1" />
@@ -71,6 +85,7 @@
         <th>Duración</th>
         <th>Escalas</th>
         <th>Precio</th>
+        <th>Detalles</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -82,6 +97,13 @@
     const msg = document.getElementById('msg');
     const tabla = document.getElementById('tabla');
     const tbody = document.getElementById('tbody');
+
+    // NUEVO: mostrar/ocultar campo de regreso
+    const roundTrip = document.getElementById('roundTrip');
+    const returnDateWrap = document.getElementById('returnDateWrap');
+    roundTrip.addEventListener('change', () => {
+      returnDateWrap.style.display = roundTrip.checked ? '' : 'none';
+    });
 
     function fmtDateTime(iso) {
       if (!iso) return '-';
@@ -107,12 +129,22 @@
       const adults = (document.getElementById('adults').value || '1').trim();
       const currency = document.getElementById('currency').value;
 
-      if (!/^[A-Z]{3}$/.test(origin)) { msg.className='error'; msg.textContent='Origen inválido (usa IATA, ej. CUN).'; btn.disabled=false; return; }
-      if (!/^[A-Z]{3}$/.test(destination)) { msg.className='error'; msg.textContent='Destino inválido (usa IATA, ej. MAD).'; btn.disabled=false; return; }
+      const returnDate = (document.getElementById('returnDate')?.value || '').trim();
+      const isRound = roundTrip?.checked;
+
+      // Validaciones en cliente
+      if (!/^[A-Z]{3}$/.test(origin)) { msg.className='error'; msg.textContent='Origen inválido (IATA, ej. CUN).'; btn.disabled=false; return; }
+      if (!/^[A-Z]{3}$/.test(destination)) { msg.className='error'; msg.textContent='Destino inválido (IATA, ej. MAD).'; btn.disabled=false; return; }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { msg.className='error'; msg.textContent='Fecha inválida (YYYY-MM-DD).'; btn.disabled=false; return; }
+      if (isRound) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) { msg.className='error'; msg.textContent='Regreso inválido (YYYY-MM-DD).'; btn.disabled=false; return; }
+        if (new Date(returnDate) < new Date(date)) { msg.className='error'; msg.textContent='El regreso no puede ser antes de la ida.'; btn.disabled=false; return; }
+      }
 
       try {
-        const url = `/api/vuelos?origin=${origin}&destination=${destination}&date=${date}&adults=${adults}&currency=${currency}`;
+        let url = `/api/vuelos?origin=${origin}&destination=${destination}&date=${date}&adults=${adults}&currency=${currency}`;
+        if (isRound) url += `&returnDate=${returnDate}`;
+
         const res = await fetch(url);
         const data = await res.json();
 
@@ -131,9 +163,10 @@
           return;
         }
 
-        resultados.forEach(r => {
+        resultados.forEach((r, idx) => {
           const tr = document.createElement('tr');
           const price = r.priceTotal ? `${r.currency || 'USD'} ${num(r.priceTotal)}` : '-';
+
           tr.innerHTML = `
             <td>${r.airline || '-'}<br><span class="mono">${r.airlineCode || ''}</span></td>
             <td><b>${r.departureIata || '-'}</b><br><span class="mono">${fmtDateTime(r.departureAt)}</span></td>
@@ -141,8 +174,35 @@
             <td>${r.duration || '-'}</td>
             <td>${r.stops}</td>
             <td>${price}</td>
+            <td><button type="button" data-idx="${idx}" class="btn-detalles">Ver detalles</button></td>
           `;
           tbody.appendChild(tr);
+
+          const trDet = document.createElement('tr');
+          trDet.className = 'details';
+          const legsText = (r.legs || []).map((leg, i) => {
+            return `Tramo ${i+1} — ${leg.airlineCode} ${leg.flightNumber}
+${leg.from}  ${fmtDateTime(leg.departAt)}  →  ${leg.to}  ${fmtDateTime(leg.arriveAt)}
+Duración: ${leg.duration || '-'}\n`;
+          }).join('\n');
+
+          trDet.innerHTML = `
+            <td colspan="7">
+              <div style="display:none" id="det-${idx}">
+                <pre>${legsText || 'Sin detalle de segmentos.'}</pre>
+              </div>
+            </td>`;
+          tbody.appendChild(trDet);
+        });
+
+        tbody.addEventListener('click', (ev) => {
+          const btn = ev.target.closest('.btn-detalles');
+          if (!btn) return;
+          const i = btn.getAttribute('data-idx');
+          const panel = document.getElementById(`det-${i}`);
+          const visible = panel.style.display !== 'none';
+          panel.style.display = visible ? 'none' : 'block';
+          btn.textContent = visible ? 'Ver detalles' : 'Ocultar';
         });
 
         msg.className = 'ok';
