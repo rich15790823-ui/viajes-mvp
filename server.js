@@ -1,4 +1,9 @@
-<script>
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const Amadeus = require('amadeus');
+
   // --------- referencias al DOM ----------
   const form = document.getElementById('form');
   const btn = document.getElementById('btn');
