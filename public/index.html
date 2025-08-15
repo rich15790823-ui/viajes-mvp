@@ -107,7 +107,7 @@
       </label>
     </div>
 
-    <!-- AQUÍ ESTÁ LA TABLA QUE BUSCAS -->
+    <!-- TABLA -->
     <table id="tabla" style="display:none;">
       <thead>
         <tr>
@@ -147,7 +147,12 @@
     function num(n){ return Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
     function fail(text){ msg.className='error'; msg.textContent=text; end(); }
     function end(){ btn.disabled=false; btn.classList.remove('loading'); btn.textContent='Buscar'; }
-    function durationToMin(iso){ if(!iso) return Infinity; const m=/^PT(?:(\\d+)H)?(?:(\\d+)M)?$/i.exec(iso); if(!m) return Infinity; return (Number(m[1]||0)*60)+(Number(m[2]||0)); }
+    function durationToMin(iso){
+      if(!iso) return Infinity;
+      const m = /PT(?:(\d+)H)?(?:(\d+)M)?/i.exec(iso);
+      if(!m) return Infinity;
+      return (Number(m[1]||0)*60)+(Number(m[2]||0));
+    }
 
     // ---- toggle regreso
     returnDateWrap.style.display = roundTripCheckbox.checked ? 'block' : 'none';
@@ -160,41 +165,41 @@
     function renderResults(list){
       tbody.innerHTML='';
       list.forEach((r,idx)=>{
-        const price = r.priceTotal ? \`\${r.currency || 'USD'} \${num(r.priceTotal)}\` : '-';
-        const regresoCol = r.hasReturn ? \`<b>\${r.returnArrivalIata || '-'}</b><br><span class="mono">\${fmt(r.returnArrivalAt)}</span>\` : '—';
+        const price = r.priceTotal ? `${r.currency || 'USD'} ${num(r.priceTotal)}` : '-';
+        const regresoCol = r.hasReturn ? `<b>${r.returnArrivalIata || '-'}</b><br><span class="mono">${fmt(r.returnArrivalAt)}</span>` : '—';
 
         const tr = document.createElement('tr');
-        tr.innerHTML = \`
-          <td>\${r.airline || '-'}<br><span class="mono">\${r.airlineCode || ''}</span></td>
-          <td><b>\${r.departureIata || '-'}</b><br><span class="mono">\${fmt(r.departureAt)}</span></td>
-          <td><b>\${r.arrivalIata || '-'}</b><br><span class="mono">\${fmt(r.arrivalAt)}</span></td>
-          <td>\${r.duration || '-'}</td>
-          <td>\${r.stops ?? '-'}</td>
-          <td>\${regresoCol}</td>
-          <td>\${price}</td>
-          <td><button type="button" data-idx="\${idx}" class="btn-detalles" style="padding:8px 10px; background: var(--rasp); color:#fff; border:0; border-radius:8px;">Ver detalles</button></td>
-        \`;
+        tr.innerHTML = `
+          <td>${r.airline || '-'}<br><span class="mono">${r.airlineCode || ''}</span></td>
+          <td><b>${r.departureIata || '-'}</b><br><span class="mono">${fmt(r.departureAt)}</span></td>
+          <td><b>${r.arrivalIata || '-'}</b><br><span class="mono">${fmt(r.arrivalAt)}</span></td>
+          <td>${r.duration || '-'}</td>
+          <td>${r.stops ?? '-'}</td>
+          <td>${regresoCol}</td>
+          <td>${price}</td>
+          <td><button type="button" data-idx="${idx}" class="btn-detalles" style="padding:8px 10px; background: var(--rasp); color:#fff; border:0; border-radius:8px;">Ver detalles</button></td>
+        `;
         tbody.appendChild(tr);
 
         const trDet = document.createElement('tr');
         trDet.className='details';
-        const legsOutText = (r.legs || []).map((s,i)=>\`IDA \${i+1} — \${s.airlineCode} \${s.flightNumber}
-  \${s.from}  \${fmt(s.departAt)}  →  \${s.to}  \${fmt(s.arriveAt)}
-  Duración: \${s.duration || '-'}\`).join('\\n\\n');
+        const legsOutText = (r.legs || []).map((s,i)=>`IDA ${i+1} — ${s.airlineCode} ${s.flightNumber}
+  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}
+  Duración: ${s.duration || '-'}`).join('\n\n');
 
-        const legsRetText = (r.returnLegs || []).map((s,i)=>\`VUELTA \${i+1} — \${s.airlineCode} \${s.flightNumber}
-  \${s.from}  \${fmt(s.departAt)}  →  \${s.to}  \${fmt(s.arriveAt)}
-  Duración: \${s.duration || '-'}\`).join('\\n\\n');
+        const legsRetText = (r.returnLegs || []).map((s,i)=>`VUELTA ${i+1} — ${s.airlineCode} ${s.flightNumber}
+  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}
+  Duración: ${s.duration || '-'}`).join('\n\n');
 
         const content = [legsOutText || 'Sin detalle de ida.', r.hasReturn ? (legsRetText || 'Sin detalle de vuelta.') : '']
-          .filter(Boolean).join('\\n\\n');
+          .filter(Boolean).join('\n\n');
 
-        trDet.innerHTML = \`<td colspan="8"><div style="display:none" id="det-\${idx}"><pre>\${content}</pre></div></td>\`;
+        trDet.innerHTML = `<td colspan="8"><div style="display:none" id="det-${idx}"><pre>${content}</pre></div></td>`;
         tbody.appendChild(trDet);
       });
     }
 
-    // Toggle detalles (permite abrir/cerrar cualquiera; no se desactiva)
+    // Toggle detalles (permite abrir/cerrar cualquiera)
     tbody.addEventListener('click', (ev)=>{
       const btn = ev.target.closest('.btn-detalles');
       if(!btn) return;
@@ -207,7 +212,7 @@
 
     function populateAirlines(list){
       const uniq = Array.from(new Set(list.map(r => r.airline || '').filter(Boolean))).sort();
-      airlineSel.innerHTML = '<option value=\"\">Todas</option>' + uniq.map(n => \`<option value="\${n}">\${n}</option>\`).join('');
+      airlineSel.innerHTML = '<option value="">Todas</option>' + uniq.map(n => `<option value="${n}">${n}</option>`).join('');
     }
 
     function applyFiltersSort(){
@@ -233,7 +238,7 @@
       });
 
       renderResults(arr);
-      sum.textContent = \`\${arr.length} resultado(s).\`;
+      sum.textContent = `${arr.length} resultado(s).`;
       tabla.style.display = '';
     }
 
