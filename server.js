@@ -14,12 +14,20 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: '7d',
   etag: true,
-  lastModified: true
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    }
+  }
 }));
 
+
 app.get('/', (_req, res) => {
+  res.set('Content-Type', 'text/html; charset=utf-8');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
