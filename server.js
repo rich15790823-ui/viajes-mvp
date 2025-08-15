@@ -1,214 +1,334 @@
-// server.js — Express + Amadeus (sandbox) + cache + ida/vuelta + retry/timeout
-require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+<script>
+  // --------- referencias al DOM ----------
+  const form = document.getElementById('form');
+  const btn = document.getElementById('btn');
+  const msg = document.getElementById('msg');
+  const sum = document.getElementById('sum') || document.createElement('span'); // por si no existe
+  const tabla = document.getElementById('tabla');
+  const tbody = document.getElementById('tbody');
+let lastResults = []; // guardamos el último resultado para ordenar/filtrar
+const controls   = document.getElementById('controls');
+const sortSel    = document.getElementById('sort');
+const directOnly = document.getElementById('directOnly');
+const airlineSel = document.getElementById('airline');
 
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const Amadeus = require('amadeus');
+function populateAirlines(list) {
+  // Llena el select de aerolíneas a partir de resultados
+  const uniq = Array.from(new Set(list.map(r => r.airline || '').filter(Boolean))).sort();
+  airlineSel.innerHTML = '<option value="">Todas</option>' + uniq.map(n => `<option value="${n}">${n}</option>`).join('');
+}
 
-const app = express();
+function applyFiltersSort() {
+  if (!lastResults || !lastResults.length) return;
 
-// ---------- Middlewares y estáticos ----------
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public'), {
-  maxAge: '7d',
-  etag: true,
-  lastModified: true,
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html')) {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    }
+  let arr = [...lastResults];
+
+  // Filtro directos
+  if (directOnly.checked) {
+    arr = arr.filter(r => (r.stops || 0) === 0);
   }
-}));
 
-
-app.get('/', (_req, res) => {
-  res.set('Content-Type', 'text/html; charset=utf-8');
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-
-app.get('/health', (_req, res) => res.json({ ok: true }));
-// Ruta de verificación de HTML (debug)
-app.get('/__htmltest', (_req, res) => {
-  res.set('Content-Type', 'text/html; charset=utf-8');
-  res.send('<!doctype html><html><head><meta charset="utf-8"><title>TEST</title></head><body><h1>OK HTML ✅</h1><p>Si ves esto formateado, el servidor sí entrega HTML.</p></body></html>');
-});
-
-
-// ---------- Amadeus (sandbox) ----------
-const AMADEUS_ID = (process.env.AMADEUS_CLIENT_ID || '').trim();
-const AMADEUS_SECRET = (process.env.AMADEUS_CLIENT_SECRET || '').trim();
-
-if (!AMADEUS_ID || !AMADEUS_SECRET) {
-  console.warn('⚠️ Faltan AMADEUS_CLIENT_ID o AMADEUS_CLIENT_SECRET. El servidor arranca, pero /api/vuelos fallará.');
-}
-
-const amadeus = new Amadeus({
-  clientId: AMADEUS_ID,
-  clientSecret: AMADEUS_SECRET,
-  hostname: 'test' // sandbox
-});
-
-// ---------- Utilidades ----------
-function withTimeout(promise, ms = 30000) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
-  ]);
-}
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-async function withRetry(fn, { attempts = 2, delayMs = 800 } = {}) {
-  let lastErr;
-  for (let i = 0; i <= attempts; i++) {
-    try { return await fn(); }
-    catch (err) {
-      lastErr = err;
-      const status = err?.response?.statusCode;
-      const retriable = err?.message === 'timeout' || status === 429 || (status >= 500 && status < 600);
-      if (i < attempts && retriable) { await sleep(delayMs * (i + 1)); continue; }
-      throw err;
-    }
+  // Filtro aerolínea por nombre
+  const selAir = airlineSel.value;
+  if (selAir) {
+    arr = arr.filter(r => (r.airline || '') === selAir);
   }
-  throw lastErr;
+
+  // Orden
+  const key = sortSel.value;
+  arr.sort((a, b) => {
+    if (key === 'priceAsc')  return Number(a.priceTotal||Infinity) - Number(b.priceTotal||Infinity);
+    if (key === 'priceDesc') return Number(b.priceTotal||-Infinity) - Number(a.priceTotal||-Infinity);
+
+    if (key === 'durAsc')  return durationToMin(a.duration) - durationToMin(b.duration);
+    if (key === 'durDesc') return durationToMin(b.duration) - durationToMin(a.duration);
+
+    if (key === 'depAsc')  return new Date(a.departureAt) - new Date(b.departureAt);
+    if (key === 'depDesc') return new Date(b.departureAt) - new Date(a.departureAt);
+
+    return 0;
+  });
+
+  renderResults(arr);
+  sum && (sum.textContent = `${arr.length} resultado(s).`);
 }
 
-// Cache en memoria (5 min)
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const cache = new Map(); // key -> { ts, data }
+// Eventos de controles
+sortSel?.addEventListener('change', applyFiltersSort);
+directOnly?.addEventListener('change', applyFiltersSort);
+airlineSel?.addEventListener('change', applyFiltersSort);
 
-// ---------- API principal ----------
-app.get('/api/vuelos', async (req, res) => {
+function durationToMin(isoDur) {
+  // Amadeus usa formato tipo "PT9H30M"
+  if (!isoDur) return Infinity;
+  const m = /PT(?:(\d+)H)?(?:(\d+)M)?/i.exec(isoDur);
+  if (!m) return Infinity;
+  const h = Number(m[1] || 0);
+  const min = Number(m[2] || 0);
+  return h * 60 + min;
+}
+
+function renderResults(list) {
+  tbody.innerHTML = '';
+  list.forEach((r, idx) => {
+    const price = r.priceTotal ? `${r.currency || 'USD'} ${Number(r.priceTotal).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}` : '-';
+    const regresoCol = r.hasReturn
+      ? `<b>${r.returnArrivalIata || '-'}</b><br><span class="mono">${fmt(r.returnArrivalAt)}</span>`
+      : '—';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.airline || '-'}<br><span class="mono">${r.airlineCode || ''}</span></td>
+      <td><b>${r.departureIata || '-'}</b><br><span class="mono">${fmt(r.departureAt)}</span></td>
+      <td><b>${r.arrivalIata || '-'}</b><br><span class="mono">${fmt(r.arrivalAt)}</span></td>
+      <td>${r.duration || '-'}</td>
+      <td>${r.stops ?? '-'}</td>
+      <td>${regresoCol}</td>
+      <td>${price}</td>
+      <td><button type="button" data-idx="${idx}" class="btn-detalles" style="padding:8px 10px; background: var(--rasp); color:#fff; border:0; border-radius:8px;">Ver detalles</button></td>
+    `;
+    tbody.appendChild(tr);
+
+    const trDet = document.createElement('tr');
+    trDet.className = 'details';
+    const legsOutText = (r.legs || []).map((s, i) =>
+`IDA ${i+1} — ${s.airlineCode} ${s.flightNumber}
+  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}
+  Duración: ${s.duration || '-'}`).join('\n\n');
+
+    const legsRetText = (r.returnLegs || []).map((s, i) =>
+`VUELTA ${i+1} — ${s.airlineCode} ${s.flightNumber}
+  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}
+  Duración: ${s.duration || '-'}`).join('\n\n');
+
+    const content = [legsOutText || 'Sin detalle de ida.', r.hasReturn ? (legsRetText || 'Sin detalle de vuelta.') : '']
+      .filter(Boolean).join('\n\n');
+
+    trDet.innerHTML = `<td colspan="8"><div style="display:none" id="det-${idx}"><pre>${content}</pre></div></td>`;
+    tbody.appendChild(trDet);
+  });
+}
+
+// 🔧 Listener PERMANENTE (sin { once:true }) para abrir/cerrar detalles y poder usar varios
+tbody.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('.btn-detalles');
+  if (!btn) return;
+  const i = btn.getAttribute('data-idx');
+  const panel = document.getElementById(`det-${i}`);
+  const visible = panel.style.display !== 'none';
+
+  // Comportamiento tipo “acordeón suave”: cierra otros y abre el actual
+  [...tbody.querySelectorAll('[id^="det-"]')].forEach(el => { el.style.display = 'none'; });
+  [...tbody.querySelectorAll('.btn-detalles')].forEach(b => b.textContent = 'Ver detalles');
+
+  panel.style.display = visible ? 'none' : 'block';
+  btn.textContent = visible ? 'Ver detalles' : 'Ocultar';
+});
+
+  const roundTripCheckbox = document.getElementById('roundTrip');
+  const returnDateWrap   = document.getElementById('returnDateWrap');
+
+  // --------- helpers ----------
+  function fmt(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return d.toLocaleString();
+  }
+  function num(n) {
+    return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fail(text) {
+    msg.className = 'error';
+    msg.textContent = text;
+    end();
+  }
+  function end() {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.textContent = 'Buscar';
+  }
+
+  // --------- mostrar/ocultar regreso ----------
+  // Estado inicial
+  if (returnDateWrap) {
+    returnDateWrap.style.display = roundTripCheckbox && roundTripCheckbox.checked ? 'block' : 'none';
+  }
+  // Cambios
+  if (roundTripCheckbox && returnDateWrap) {
+    roundTripCheckbox.addEventListener('change', () => {
+      returnDateWrap.style.display = roundTripCheckbox.checked ? 'block' : 'none';
+    });
+  }
+
+  // --------- submit ----------
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    msg.className = 'muted';
+    msg.textContent = 'Buscando...';
+    if (sum) sum.textContent = '';
+    btn.disabled = true;
+    btn.classList.add('loading');
+    btn.textContent = 'Buscando…';
+    tabla.style.display = 'none';
+    tbody.innerHTML = '';
+
+    // valores del formulario
+    const origin      = document.getElementById('origin').value.trim().toUpperCase();
+    const destination = document.getElementById('destination').value.trim().toUpperCase();
+    const date        = document.getElementById('date').value.trim();
+    const adults      = (document.getElementById('adults').value || '1').trim();
+    const currency    = document.getElementById('currency').value;
+    const returnDate  = (roundTripCheckbox && roundTripCheckbox.checked)
+      ? (document.getElementById('returnDate').value || '').trim()
+      : '';
+
+    // validaciones
+    if (!/^[A-Z]{3}$/.test(origin))      return fail('Origen inválido (IATA, ej. CUN).');
+    if (!/^[A-Z]{3}$/.test(destination)) return fail('Destino inválido (IATA, ej. MAD).');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('Salida inválida (YYYY-MM-DD).');
+    if (roundTripCheckbox && roundTripCheckbox.checked) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) return fail('Regreso inválido (YYYY-MM-DD).');
+      if (new Date(returnDate) < new Date(date))    return fail('El regreso no puede ser antes de la salida.');
+    }
+
+    try {
+      // construir query
+      const q = new URLSearchParams({ origin, destination, date, adults, currency });
+      if (returnDate) q.set('returnDate', returnDate);
+
+      // llamada al backend
+      const res = await fetch('/api/vuelos?' + q.toString());
+      const data = await res.json();
+
+      if (!res.ok) {
+        return fail(
+          res.status === 504
+            ? 'La búsqueda tardó demasiado (timeout). Intenta otras fechas.'
+            : (data?.error || 'Error en la búsqueda.')
+        );
+      }
+
+      const resultados = data.results || [];
+      lastResults = resultados;
+populateAirlines(lastResults);
+controls.style.display = 'flex'; // muestra los controles
+applyFiltersSort();              // aplica estado inicial (orden/filtros)
+msg.className = 'ok';
+msg.textContent = 'Listo.';
+tabla.style.display = '';
+end();
+
+
+      // pintar resultados
+      resultados.forEach((r, idx) => {
+        const tr = document.createElement('tr');
+        const price = r.priceTotal ? `${r.currency || 'USD'} ${num(r.priceTotal)}` : '-';
+        const regresoCol = r.hasReturn
+          ? `<b>${r.returnArrivalIata || '-'}</b><br><span class="mono">${fmt(r.returnArrivalAt)}</span>`
+          : '—';
+
+        tr.innerHTML = `
+          <td>${r.airline || '-'}<br><span class="mono">${r.airlineCode || ''}</span></td>
+          <td><b>${r.departureIata || '-'}</b><br><span class="mono">${fmt(r.departureAt)}</span></td>
+          <td><b>${r.arrivalIata || '-'}</b><br><span class="mono">${fmt(r.arrivalAt)}</span></td>
+          <td>${r.duration || '-'}</td>
+          <td>${r.stops ?? '-'}</td>
+          <td>${regresoCol}</td>
+          <td>${price}</td>
+          <td><button type="button" data-idx="${idx}" class="btn-detalles">Ver detalles</button></td>
+        `;
+        tbody.appendChild(tr);
+
+        // fila de detalles
+        const trDet = document.createElement('tr');
+        trDet.className = 'details';
+        const legsOutText = (r.legs || []).map((s, i) =>
+          `IDA ${i+1} — ${s.airlineCode} ${s.flightNumber}
+  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}
+  Duración: ${s.duration || '-'}`
+        ).join('\n\n');
+
+        const legsRetText = (r.returnLegs || []).map((s, i) =>
+          `VUELTA ${i+1} — ${s.airlineCode} ${s.flightNumber}
+  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}
+  Duración: ${s.duration || '-'}`
+        ).join('\n\n');
+
+        const content = [
+          legsOutText || 'Sin detalle de ida.',
+          r.hasReturn ? (legsRetText || 'Sin detalle de vuelta.') : ''
+        ].filter(Boolean).join('\n\n');
+
+        trDet.innerHTML = `<td colspan="8"><div style="display:none" id="det-${idx}"><pre>${content}</pre></div></td>`;
+        tbody.appendChild(trDet);
+      });
+
+      // toggle de detalles (se registra una sola vez por render)
+      tbody.addEventListener('click', (ev) => {
+        const btn = ev.target.closest('.btn-detalles');
+        if (!btn) return;
+        const i = btn.getAttribute('data-idx');
+        const panel = document.getElementById(`det-${i}`);
+        const visible = panel.style.display !== 'none';
+        panel.style.display = visible ? 'none' : 'block';
+        btn.textContent = visible ? 'Ver detalles' : 'Ocultar';
+      }, { once: true });
+
+      msg.className = 'ok';
+      msg.textContent = 'Listo.';
+      if (sum) sum.textContent = `${resultados.length} resultado(s).`;
+      tabla.style.display = '';
+      end();
+    } catch (e) {
+      console.error(e);
+      fail('Error de red o servidor.');
+    }
+  });
+</script>
+// ===== /api/suggest: autocompletar ciudades/aeropuertos =====
+app.get('/api/suggest', async (req, res) => {
   try {
-    const origin = (req.query.origin || '').toUpperCase().trim();
-    const destination = (req.query.destination || '').toUpperCase().trim();
-    const date = (req.query.date || '').trim();
-    const returnDate = (req.query.returnDate || '').trim(); // opcional
-    const adults = Number(req.query.adults || 1);
-    const currency = (req.query.currency || 'USD').toUpperCase().trim();
+    const q = (req.query.q || '').trim();
+    if (q.length < 2) return res.json([]);
 
-    // Validaciones
-    if (!/^[A-Z]{3}$/.test(origin)) return res.status(400).json({ error: 'Origin inválido (IATA de 3 letras).' });
-    if (!/^[A-Z]{3}$/.test(destination)) return res.status(400).json({ error: 'Destination inválido (IATA de 3 letras).' });
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Date inválido. Use YYYY-MM-DD.' });
-    if (returnDate) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) return res.status(400).json({ error: 'returnDate inválido. Use YYYY-MM-DD.' });
-      if (new Date(returnDate) < new Date(date)) return res.status(400).json({ error: 'returnDate no puede ser antes de date.' });
-    }
-    if (!Number.isInteger(adults) || adults < 1) return res.status(400).json({ error: 'Adults debe ser entero >= 1.' });
-
-    // Cache
-    const cacheKey = JSON.stringify({ origin, destination, date, returnDate, adults, currency });
-    const cached = cache.get(cacheKey);
+    // cache simple (re-usa tu cache y constantes)
+    const key = `suggest:${q.toLowerCase()}`;
+    const cached = cache.get(key);
     if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
       return res.json(cached.data);
     }
 
-    // Parámetros Amadeus
-    const params = {
-      originLocationCode: origin,
-      destinationLocationCode: destination,
-      departureDate: date,
-      adults,
-      currencyCode: currency,
-      max: returnDate ? 5 : 10 // roundtrip más ágil
-    };
-    if (returnDate) params.returnDate = returnDate;
-
-    // Llamada con timeout + retry
-    const response = await withRetry(
-      () => withTimeout(amadeus.shopping.flightOffersSearch.get(params), 30000),
-      { attempts: 2, delayMs: 1000 }
+    const resp = await withTimeout(
+      amadeus.referenceData.locations.get({
+        keyword: q,
+        subType: 'CITY,AIRPORT'
+      }),
+      10000
     );
 
-    // Diccionarios
-    const dict = response.result?.dictionaries || {};
-    const carriers = dict.carriers || {};
-
-    // Transformación con ida y (si existe) vuelta
-    const data = (response.data || []).map((offer) => {
-      // ----- IDA -----
-      const itinOut = offer.itineraries?.[0]; // ida
-      const segOut = itinOut?.segments || [];
-      const firstOut = segOut[0];
-      const lastOut = segOut[segOut.length - 1];
-
-      const airlineCode = firstOut?.carrierCode || '';
-      const airlineName = carriers[airlineCode] || airlineCode;
-
-      // Legs de ida
-      const legsOut = segOut.map((s) => ({
-        airlineCode: s.carrierCode || '',
-        flightNumber: s.number || '',
-        from: s.departure?.iataCode || null,
-        departAt: s.departure?.at || null,
-        to: s.arrival?.iataCode || null,
-        arriveAt: s.arrival?.at || null,
-        duration: s.duration || null
-      }));
-
-      // ----- VUELTA (si existe) -----
-      const itinRet = offer.itineraries?.[1] || null;
-      const segRet = itinRet?.segments || [];
-      const firstRet = segRet[0];
-      const lastRet = segRet[segRet.length - 1];
-
-      // Legs de vuelta
-      const legsRet = segRet.map((s) => ({
-        airlineCode: s.carrierCode || '',
-        flightNumber: s.number || '',
-        from: s.departure?.iataCode || null,
-        departAt: s.departure?.at || null,
-        to: s.arrival?.iataCode || null,
-        arriveAt: s.arrival?.at || null,
-        duration: s.duration || null
-      }));
-
-      return {
-        // Precio / moneda
-        priceTotal: offer.price?.total || null,
-        currency: offer.price?.currency || currency,
-
-        // Info principal (basada en la ida)
-        airline: airlineName,
-        airlineCode,
-
-        // Ida (outbound)
-        departureAt: firstOut?.departure?.at || null,
-        departureIata: firstOut?.departure?.iataCode || null,
-        arrivalAt: lastOut?.arrival?.at || null,
-        arrivalIata: lastOut?.arrival?.iataCode || null,
-        duration: itinOut?.duration || null,
-        stops: Math.max(0, segOut.length - 1),
-        legs: legsOut,
-
-        // Vuelta (return) — puede venir null si no pediste returnDate
-        hasReturn: !!itinRet,
-        returnDepartureAt: firstRet?.departure?.at || null,
-        returnDepartureIata: firstRet?.departure?.iataCode || null,
-        returnArrivalAt: lastRet?.arrival?.at || null,
-        returnArrivalIata: lastRet?.arrival?.iataCode || null,
-        returnDuration: itinRet?.duration || null,
-        returnStops: segRet.length ? Math.max(0, segRet.length - 1) : null,
-        returnLegs: legsRet
-      };
+    const out = (resp.data || []).map(x => {
+      const code = x.iataCode || '';
+      const city = x.address?.cityName || x.detailedName || x.name || '';
+      const name = x.name || x.detailedName || city || '';
+      const country = x.address?.countryCode || '';
+      const sub = x.subType; // 'CITY' o 'AIRPORT'
+      const label = sub === 'CITY'
+        ? `${city} (${code}) — Ciudad${country ? ' · ' + country : ''}`
+        : `${name} (${code}) — Aeropuerto${country ? ' · ' + country : ''}`;
+      return { label, iataCode: code, subType: sub, name, detailed: { cityName: city, countryCode: country } };
     });
 
-    const payload = { results: data };
-    cache.set(cacheKey, { ts: Date.now(), data: payload });
-    return res.json(payload);
+    const payload = out.slice(0, 12);
+    cache.set(key, { ts: Date.now(), data: payload });
+    res.json(payload);
   } catch (err) {
-    const status = err?.response?.statusCode || (err?.message === 'timeout' ? 504 : 500);
-    const body = err?.response?.result || { error: err?.message || 'Error inesperado' };
-    return res.status(status).json(body);
+    console.error('Error /api/suggest:', err?.response?.result || err.message || err);
+    res.status(500).json({ error: 'suggest_failed' });
   }
 });
 
-// ---------- Arranque (Render) ----------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log('Servidor corriendo en 0.0.0.0:' + PORT);
+  console.log(`✅ Servidor corriendo en 0.0.0.0:${PORT}`);
 });
