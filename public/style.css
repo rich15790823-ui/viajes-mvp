@@ -1,33 +1,118 @@
-:root{ color-scheme: light dark; }
-*{ box-sizing: border-box; }
-body{
-  font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-  max-width: 1000px; margin: 24px auto; padding: 0 16px;
+/* ====== RESET BÁSICO ====== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
-h1{ margin: 0 0 8px; }
-.hint{ color:#666; font-size:12px; margin-bottom:16px; }
-form{ display:grid; grid-template-columns: repeat(6,1fr); gap:12px; align-items:end; }
-label{ display:block; font-size:12px; margin-bottom:6px; }
-input, select, button{ padding:10px; font-size:14px; width:100%; border:1px solid #ddd; border-radius:8px; }
-button{ cursor:pointer; border:0; background:#001f54; color:#fff; }
-.row-full{ grid-column: 1 / -1; }
-#msg{ margin-top:6px; min-height:20px; font-size:14px; }
-.error{ color:#b42150; } .ok{ color:#117a00; } .muted{ color:#666; font-size:12px; }
 
-.controls{ margin-top: 8px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
-.controls .left{ display:flex; gap:12px; align-items:center; }
-.controls label{ margin:0; }
-
-table{ width:100%; border-collapse:collapse; margin-top:16px; }
-th, td{ border:1px solid #ddd; padding:8px; font-size:14px; text-align:left; vertical-align:top; }
-th{ background:#f5f5f5; }
-.mono{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; }
-
-.details td{ background:#fafafa; }
-button.loading{ position:relative; opacity:.8; pointer-events:none; }
-button.loading::after{
-  content:""; position:absolute; right:12px; top:50%; width:14px; height:14px;
-  margin-top:-7px; border:2px solid #fff; border-top-color:transparent; border-radius:50%;
-  animation:spin .7s linear infinite;
+body {
+  font-family: Arial, sans-serif;
+  background: #f5f6fa;
+  color: #333;
+  padding: 20px;
+  line-height: 1.4;
 }
-@keyframes spin{ to{ transform:rotate(360deg) } }
+
+/* ====== TÍTULO Y PÁRRAFOS ====== */
+h1 {
+  font-size: 1.8em;
+  margin-bottom: 8px;
+}
+
+.hint {
+  font-size: 0.9em;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+/* ====== FORMULARIO ====== */
+form {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  margin-bottom: 20px;
+}
+
+form div {
+  margin-bottom: 15px;
+}
+
+label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+input, select, button {
+  width: 100%;
+  padding: 8px;
+  font-size: 1em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+button {
+  background-color: #2d89ef;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #1b5fbd;
+}
+
+/* ====== CONTROLES Y FILTROS ====== */
+.controls {
+  display: flex;
+  justify-content: space-between;
+  background: white;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.controls label {
+  margin-right: 10px;
+  font-weight: normal;
+}
+
+.muted {
+  color: #666;
+  font-size: 0.9em;
+}
+
+/* ====== TABLA DE RESULTADOS ====== */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  text-align: center;
+}
+
+th {
+  background: #2d89ef;
+  color: white;
+}
+
+tr:hover {
+  background: #f0f4ff;
+}
+
+/* ====== DETALLES Y BOTONES ====== */
+a.details {
+  color: #2d89ef;
+  text-decoration: none;
+}
+
+a.details:hover {
+  text-decoration: underline;
+}
