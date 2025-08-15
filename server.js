@@ -1,4 +1,4 @@
-// server.js — Express + Amadeus (sandbox) + cache + ida/vuelta
+// server.js — Express + Amadeus (sandbox) + cache + ida/vuelta + retry/timeout
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const express = require('express');
@@ -28,7 +28,7 @@ const AMADEUS_ID = (process.env.AMADEUS_CLIENT_ID || '').trim();
 const AMADEUS_SECRET = (process.env.AMADEUS_CLIENT_SECRET || '').trim();
 
 if (!AMADEUS_ID || !AMADEUS_SECRET) {
-  console.warn('⚠️ Faltan AMADEUS_CLIENT_ID o AMADEUS_CLIENT_SECRET. /api/vuelos fallará.');
+  console.warn('⚠️ Faltan AMADEUS_CLIENT_ID o AMADEUS_CLIENT_SECRET. El servidor arranca, pero /api/vuelos fallará.');
 }
 
 const amadeus = new Amadeus({
@@ -114,16 +114,36 @@ app.get('/api/vuelos', async (req, res) => {
     const dict = response.result?.dictionaries || {};
     const carriers = dict.carriers || {};
 
-    // Transformación simple
+    // Transformación con ida y (si existe) vuelta
     const data = (response.data || []).map((offer) => {
-      const itin = offer.itineraries?.[0];
-      const segments = itin?.segments || [];
-      const first = segments[0];
-      const last = segments[segments.length - 1];
-      const airlineCode = first?.carrierCode || '';
+      // ----- IDA -----
+      const itinOut = offer.itineraries?.[0]; // ida
+      const segOut = itinOut?.segments || [];
+      const firstOut = segOut[0];
+      const lastOut = segOut[segOut.length - 1];
+
+      const airlineCode = firstOut?.carrierCode || '';
       const airlineName = carriers[airlineCode] || airlineCode;
 
-      const legs = segments.map((s) => ({
+      // Legs de ida
+      const legsOut = segOut.map((s) => ({
+        airlineCode: s.carrierCode || '',
+        flightNumber: s.number || '',
+        from: s.departure?.iataCode || null,
+        departAt: s.departure?.at || null,
+        to: s.arrival?.iataCode || null,
+        arriveAt: s.arrival?.at || null,
+        duration: s.duration || null
+      }));
+
+      // ----- VUELTA (si existe) -----
+      const itinRet = offer.itineraries?.[1] || null;
+      const segRet = itinRet?.segments || [];
+      const firstRet = segRet[0];
+      const lastRet = segRet[segRet.length - 1];
+
+      // Legs de vuelta
+      const legsRet = segRet.map((s) => ({
         airlineCode: s.carrierCode || '',
         flightNumber: s.number || '',
         from: s.departure?.iataCode || null,
@@ -134,17 +154,32 @@ app.get('/api/vuelos', async (req, res) => {
       }));
 
       return {
+        // Precio / moneda
         priceTotal: offer.price?.total || null,
         currency: offer.price?.currency || currency,
+
+        // Info principal (basada en la ida)
         airline: airlineName,
         airlineCode,
-        departureAt: first?.departure?.at || null,
-        departureIata: first?.departure?.iataCode || null,
-        arrivalAt: last?.arrival?.at || null,
-        arrivalIata: last?.arrival?.iataCode || null,
-        duration: itin?.duration || null,
-        stops: Math.max(0, segments.length - 1),
-        legs
+
+        // Ida (outbound)
+        departureAt: firstOut?.departure?.at || null,
+        departureIata: firstOut?.departure?.iataCode || null,
+        arrivalAt: lastOut?.arrival?.at || null,
+        arrivalIata: lastOut?.arrival?.iataCode || null,
+        duration: itinOut?.duration || null,
+        stops: Math.max(0, segOut.length - 1),
+        legs: legsOut,
+
+        // Vuelta (return) — puede venir null si no pediste returnDate
+        hasReturn: !!itinRet,
+        returnDepartureAt: firstRet?.departure?.at || null,
+        returnDepartureIata: firstRet?.departure?.iataCode || null,
+        returnArrivalAt: lastRet?.arrival?.at || null,
+        returnArrivalIata: lastRet?.arrival?.iataCode || null,
+        returnDuration: itinRet?.duration || null,
+        returnStops: segRet.length ? Math.max(0, segRet.length - 1) : null,
+        returnLegs: legsRet
       };
     });
 
