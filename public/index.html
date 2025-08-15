@@ -1,245 +1,181 @@
-<!DOCTYPE html>
-<html lang="es">
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Buscador de Vuelos (MVP)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    /* ====== PALETA ====== */
-    :root {
-      --rasp: #B42150;    /* acentos */
-      --gray: #CCCCCD;    /* fondo suave general */
-      --blue: #0552AC;    /* primario (botones/enlaces) */
-      --navy: #001F54;    /* encabezados, table head */
-      --text: #1F2430;    /* texto principal */
-      --card: #FFFFFF;    /* fondo tarjetas/contenido */
-      --border: #E6E7EA;  /* bordes sutiles */
-    }
-    html, body { background: var(--gray); color: var(--text); }
-    body {
-      font-family: system-ui, -apple-system, Arial, sans-serif;
-      max-width: 1100px; margin: 32px auto; padding: 0 16px;
-    }
-    .card {
-      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
-      box-shadow: 0 6px 18px rgba(0,0,0,.06); padding: 20px;
-    }
-    h1 { margin: 0 0 8px; font-size: 24px; color: var(--navy); }
-    .hint { color: #4f566b; font-size: 12px; margin-bottom: 16px; }
-
-    /* FORM */
-    form { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; align-items: end; }
-    .col-2 { grid-column: span 2; }
-    .row-full { grid-column: 1 / -1; }
-    label { display:block; font-size:12px; margin-bottom:6px; color:var(--navy); font-weight:600; }
-    input, select, button {
-      width: 100%; box-sizing: border-box; padding: 12px; font-size: 14px; border-radius: 10px;
-    }
-    input, select {
-      background: #fff; color: var(--text); border:1px solid var(--border);
-      outline: none; transition: box-shadow .15s ease, border-color .15s ease;
-    }
-    input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(5,82,172,.15); }
-    .checkbox { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--text); }
-    .checkbox input { width:auto; }
-
-    button {
-      cursor: pointer; border: 0; color:#fff; font-weight:700; letter-spacing:.2px;
-      background: linear-gradient(90deg, var(--blue), var(--navy));
-      box-shadow: 0 6px 18px rgba(5,82,172,.25);
-      transition: transform .06s ease, opacity .2s ease;
-    }
-    button:hover { opacity:.95; } button:active { transform: translateY(1px); }
-    #msg { margin-left: 12px; min-height: 20px; font-size: 14px; }
-    .error { color: var(--rasp); font-weight: 600; }
-    .ok { color: #0a7a00; } .muted { color: #6b7280; font-size: 12px; }
-
-    /* TABLA */
-    table {
-      width: 100%; border-collapse: collapse; margin-top: 16px; background:#fff;
-      border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
-    }
-    th, td { padding: 12px 10px; font-size: 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
-    thead th { background: var(--navy); color:#fff; border-bottom:0; font-weight:700; }
-    tbody tr:nth-child(odd) td { background:#fafbfc; }
-    .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color:#555; }
-    .details td { background:#f7f9ff; }
-    .tag {
-      display:inline-block; background: rgba(180,33,80,.1); color: var(--rasp);
-      border: 1px solid rgba(180,33,80,.25); padding: 2px 8px; border-radius:999px; font-size:12px; font-weight:700;
-    }
-    button.loading { position:relative; pointer-events:none; opacity:.9; }
-    button.loading::after{
-      content:""; position:absolute; right:12px; top:50%; width:14px; height:14px;
-      margin-top:-7px; border:2px solid #fff; border-top-color: transparent; border-radius:50%;
-      animation: spin .7s linear infinite;
-    }
-    @keyframes spin{to{transform:rotate(360deg)}}
-    .shell { display:grid; gap:16px; }
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title></title>
+  <meta name="Generator" content="Cocoa HTML Writer">
+  <meta name="CocoaVersion" content="2575.7">
+  <style type="text/css">
+    span.s1 {font-kerning: none}
   </style>
 </head>
 <body>
-  <div class="shell">
-    <div class="card">
-      <h1>Buscador de Vuelos (MVP)</h1>
-      <p class="hint">Ejemplo: <b>CUN</b> → <b>MAD</b>, salida <b>2025-09-01</b>, adultos <b>1</b>.</p>
-
-      <form id="form">
-        <div class="col-2">
-          <label for="origin">Origen (IATA)</label>
-          <input id="origin" name="origin" value="CUN" maxlength="3" />
-        </div>
-        <div class="col-2">
-          <label for="destination">Destino (IATA)</label>
-          <input id="destination" name="destination" value="MAD" maxlength="3" />
-        </div>
-        <div class="col-2">
-          <label for="date">Salida (YYYY-MM-DD)</label>
-          <input id="date" name="date" value="2025-09-01" />
-        </div>
-        <div class="col-2">
-          <label for="adults">Adultos</label>
-          <input id="adults" name="adults" type="number" min="1" value="1" />
-        </div>
-        <div class="col-2">
-          <label for="currency">Moneda</label>
-          <select id="currency" name="currency">
-            <option value="USD" selected>USD</option>
-            <option value="MXN">MXN</option>
-            <option value="EUR">EUR</option>
-          </select>
-        </div>
-        <div class="col-2">
-          <label class="checkbox"><input type="checkbox" id="roundTrip" /> Ida y vuelta</label>
-          <div id="returnDateWrap" style="display:none; margin-top:6px;">
-            <label for="returnDate">Regreso (YYYY-MM-DD)</label>
-            <input id="returnDate" name="returnDate" />
-          </div>
-        </div>
-
-        <div class="row-full" style="display:flex; align-items:center; gap:8px;">
-          <button id="btn" type="submit" style="width:auto; padding-inline:18px;">Buscar</button>
-          <span id="msg" class="muted"></span>
-        </div>
-      </form>
-    </div>
-
-    <div class="card">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-        <span class="tag">Resultados</span>
-        <span id="sum" class="muted"></span>
-      </div>
-
-      <table id="tabla" style="display:none;">
-        <thead>
-          <tr>
-            <th>Aerolínea</th>
-            <th>Salida (ida)</th>
-            <th>Llegada (ida)</th>
-            <th>Duración (ida)</th>
-            <th>Escalas (ida)</th>
-            <th>Regreso (llegada)</th>
-            <th>Precio</th>
-            <th>Detalles</th>
-          </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <script>
-    const form = document.getElementById('form');
-    const btn = document.getElementById('btn');
-    const msg = document.getElementById('msg');
-    const sum = document.getElementById('sum');
-    const tabla = document.getElementById('tabla');
-    const tbody = document.getElementById('tbody');
-    const roundTripCheckbox = document.getElementById('roundTrip');
-    const returnDateWrap = document.getElementById('returnDateWrap');
-
-    roundTripCheckbox.addEventListener('change', () => {
-      returnDateWrap.style.display = roundTripCheckbox.checked ? 'block' : 'none';
-    });
-
-    function fmt(iso) { if (!iso) return '-'; const d = new Date(iso); return d.toLocaleString(); }
-    function num(n) { return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      msg.className = 'muted'; msg.textContent = 'Buscando...';
-      sum.textContent = '';
-      btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Buscando…';
-      tabla.style.display = 'none'; tbody.innerHTML = '';
-
-      const origin = document.getElementById('origin').value.trim().toUpperCase();
-      const destination = document.getElementById('destination').value.trim().toUpperCase();
-      const date = document.getElementById('date').value.trim();
-      const adults = (document.getElementById('adults').value || '1').trim();
-      const currency = document.getElementById('currency').value;
-      const returnDate = roundTripCheckbox.checked ? (document.getElementById('returnDate').value || '').trim() : '';
-
-      // Validaciones rápidas
-      if (!/^[A-Z]{3}$/.test(origin)) return fail('Origen inválido (IATA, ej. CUN).');
-      if (!/^[A-Z]{3}$/.test(destination)) return fail('Destino inválido (IATA, ej. MAD).');
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('Salida inválida (YYYY-MM-DD).');
-      if (roundTripCheckbox.checked && !/^\d{4}-\d{2}-\d2$/.test(returnDate)) return fail('Regreso inválido (YYYY-MM-DD).');
-
-      try {
-        const q = new URLSearchParams({ origin, destination, date, adults, currency });
-        if (returnDate) q.set('returnDate', returnDate);
-
-        const res = await fetch('/api/vuelos?' + q.toString());
-        const data = await res.json();
-
-        if (!res.ok) return fail(res.status === 504 ? 'La búsqueda tardó demasiado (timeout). Intenta otra fecha.' : (data?.error || 'Error en la búsqueda.'));
-
-        const resultados = data.results || [];
-        if (resultados.length === 0) {
-          msg.className = 'ok'; msg.textContent = 'Sin resultados. Prueba otras fechas o rutas.'; return end();
-        }
-
-        resultados.forEach((r, idx) => {
-          const tr = document.createElement('tr');
-          const price = r.priceTotal ? `${r.currency || 'USD'} ${num(r.priceTotal)}` : '-';
-          const regresoCol = r.hasReturn ? `<b>${r.returnArrivalIata || '-'}</b><br><span class="mono">${fmt(r.returnArrivalAt)}</span>` : '—';
-          tr.innerHTML = `
-            <td>${r.airline || '-'}<br><span class="mono">${r.airlineCode || ''}</span></td>
-            <td><b>${r.departureIata || '-'}</b><br><span class="mono">${fmt(r.departureAt)}</span></td>
-            <td><b>${r.arrivalIata || '-'}</b><br><span class="mono">${fmt(r.arrivalAt)}</span></td>
-            <td>${r.duration || '-'}</td>
-            <td>${r.stops ?? '-'}</td>
-            <td>${regresoCol}</td>
-            <td>${price}</td>
-            <td><button type="button" data-idx="${idx}" class="btn-detalles" style="padding:8px 10px; background: var(--rasp);">Ver detalles</button></td>
-          `;
-          tbody.appendChild(tr);
-
-          const trDet = document.createElement('tr');
-          trDet.className = 'details';
-          const legsOutText = (r.legs || []).map((s, i) => `IDA ${i+1} — ${s.airlineCode} ${s.flightNumber}\n  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}\n  Duración: ${s.duration || '-'}`).join('\n\n');
-          const legsRetText = (r.returnLegs || []).map((s, i) => `VUELTA ${i+1} — ${s.airlineCode} ${s.flightNumber}\n  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}\n  Duración: ${s.duration || '-'}`).join('\n\n');
-          const content = [legsOutText || 'Sin detalle de ida.', r.hasReturn ? (legsRetText || 'Sin detalle de vuelta.') : ''].filter(Boolean).join('\n\n');
-          trDet.innerHTML = `<td colspan="8"><div style="display:none" id="det-${idx}"><pre>${content}</pre></div></td>`;
-          tbody.appendChild(trDet);
-        });
-
-        tbody.addEventListener('click', (ev) => {
-          const btn = ev.target.closest('.btn-detalles'); if (!btn) return;
-          const i = btn.getAttribute('data-idx'); const panel = document.getElementById(\`det-\${i}\`);
-          const visible = panel.style.display !== 'none'; panel.style.display = visible ? 'none' : 'block';
-          btn.textContent = visible ? 'Ver detalles' : 'Ocultar';
-        }, { once: true });
-
-        msg.className = 'ok'; msg.textContent = 'Listo.'; sum.textContent = \`\${resultados.length} resultado(s).\`;
-        tabla.style.display = ''; end();
-      } catch (e) {
-        console.error(e); fail('Error de red o servidor.');
-      }
-    });
-
-    function fail(text) { msg.className = 'error'; msg.textContent = text; end(); }
-    function end() { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = 'Buscar'; }
-  </script>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i>&lt;script&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>// --------- referencias al DOM ----------</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>const form = document.getElementById('form');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>const btn = document.getElementById('btn');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>const msg = document.getElementById('msg');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>const sum = document.getElementById('sum') || document.createElement('span'); // por si no existe</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>const tabla = document.getElementById('tabla');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>const tbody = document.getElementById('tbody');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>const roundTripCheckbox = document.getElementById('roundTrip');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>const returnDateWrap <span class="Apple-converted-space">  </span>= document.getElementById('returnDateWrap');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>// --------- helpers ----------</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>function fmt(iso) {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>if (!iso) return '-';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>const d = new Date(iso);</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>return d.toLocaleString();</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>function num(n) {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>function fail(text) {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>msg.className = 'error';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>msg.textContent = text;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>end();</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>function end() {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>btn.disabled = false;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>btn.classList.remove('loading');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>btn.textContent = 'Buscar';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>// --------- mostrar/ocultar regreso ----------</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>// Estado inicial</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>if (returnDateWrap) {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>returnDateWrap.style.display = roundTripCheckbox &amp;&amp; roundTripCheckbox.checked ? 'block' : 'none';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>// Cambios</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>if (roundTripCheckbox &amp;&amp; returnDateWrap) {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>roundTripCheckbox.addEventListener('change', () =&gt; {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>returnDateWrap.style.display = roundTripCheckbox.checked ? 'block' : 'none';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>});</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>// --------- submit ----------</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>form.addEventListener('submit', async (e) =&gt; {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>e.preventDefault();</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>msg.className = 'muted';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>msg.textContent = 'Buscando...';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>if (sum) sum.textContent = '';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>btn.disabled = true;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>btn.classList.add('loading');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>btn.textContent = 'Buscando…';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>tabla.style.display = 'none';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>tbody.innerHTML = '';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>// valores del formulario</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>const origin<span class="Apple-converted-space">      </span>= document.getElementById('origin').value.trim().toUpperCase();</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>const destination = document.getElementById('destination').value.trim().toUpperCase();</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>const date<span class="Apple-converted-space">        </span>= document.getElementById('date').value.trim();</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>const adults<span class="Apple-converted-space">      </span>= (document.getElementById('adults').value || '1').trim();</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>const currency<span class="Apple-converted-space">    </span>= document.getElementById('currency').value;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>const returnDate<span class="Apple-converted-space">  </span>= (roundTripCheckbox &amp;&amp; roundTripCheckbox.checked)</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>? (document.getElementById('returnDate').value || '').trim()</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>: '';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>// validaciones</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>if (!/^[A-Z]{3}$/.test(origin))<span class="Apple-converted-space">      </span>return fail('Origen inválido (IATA, ej. CUN).');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>if (!/^[A-Z]{3}$/.test(destination)) return fail('Destino inválido (IATA, ej. MAD).');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('Salida inválida (YYYY-MM-DD).');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>if (roundTripCheckbox &amp;&amp; roundTripCheckbox.checked) {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>if (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) return fail('Regreso inválido (YYYY-MM-DD).');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>if (new Date(returnDate) &lt; new Date(date))<span class="Apple-converted-space">    </span>return fail('El regreso no puede ser antes de la salida.');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>try {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>// construir query</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>const q = new URLSearchParams({ origin, destination, date, adults, currency });</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>if (returnDate) q.set('returnDate', returnDate);</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>// llamada al backend</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>const res = await fetch('/api/vuelos?' + q.toString());</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>const data = await res.json();</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>if (!res.ok) {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>return fail(</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>res.status === 504</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">            </span>? 'La búsqueda tardó demasiado (timeout). Intenta otras fechas.'</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">            </span>: (data?.error || 'Error en la búsqueda.')</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>);</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>const resultados = data.results || [];</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>if (resultados.length === 0) {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>msg.className = 'ok';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>msg.textContent = 'Sin resultados. Prueba otras fechas o rutas.';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>return end();</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>// pintar resultados</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>resultados.forEach((r, idx) =&gt; {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const tr = document.createElement('tr');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const price = r.priceTotal ? `${r.currency || 'USD'} ${num(r.priceTotal)}` : '-';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const regresoCol = r.hasReturn</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>? `&lt;b&gt;${r.returnArrivalIata || '-'}&lt;/b&gt;&lt;br&gt;&lt;span class="mono"&gt;${fmt(r.returnArrivalAt)}&lt;/span&gt;`</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>: '—';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>tr.innerHTML = `</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>&lt;td&gt;${r.airline || '-'}&lt;br&gt;&lt;span class="mono"&gt;${r.airlineCode || ''}&lt;/span&gt;&lt;/td&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>&lt;td&gt;&lt;b&gt;${r.departureIata || '-'}&lt;/b&gt;&lt;br&gt;&lt;span class="mono"&gt;${fmt(r.departureAt)}&lt;/span&gt;&lt;/td&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>&lt;td&gt;&lt;b&gt;${r.arrivalIata || '-'}&lt;/b&gt;&lt;br&gt;&lt;span class="mono"&gt;${fmt(r.arrivalAt)}&lt;/span&gt;&lt;/td&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>&lt;td&gt;${r.duration || '-'}&lt;/td&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>&lt;td&gt;${r.stops ?? '-'}&lt;/td&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>&lt;td&gt;${regresoCol}&lt;/td&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>&lt;td&gt;${price}&lt;/td&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>&lt;td&gt;&lt;button type="button" data-idx="${idx}" class="btn-detalles"&gt;Ver detalles&lt;/button&gt;&lt;/td&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>`;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>tbody.appendChild(tr);</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>// fila de detalles</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const trDet = document.createElement('tr');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>trDet.className = 'details';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const legsOutText = (r.legs || []).map((s, i) =&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>`IDA ${i+1} — ${s.airlineCode} ${s.flightNumber}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>${s.from}<span class="Apple-converted-space">  </span>${fmt(s.departAt)}<span class="Apple-converted-space">  </span>→<span class="Apple-converted-space">  </span>${s.to}<span class="Apple-converted-space">  </span>${fmt(s.arriveAt)}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>Duración: ${s.duration || '-'}`</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>).join('\n\n');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const legsRetText = (r.returnLegs || []).map((s, i) =&gt;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>`VUELTA ${i+1} — ${s.airlineCode} ${s.flightNumber}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>${s.from}<span class="Apple-converted-space">  </span>${fmt(s.departAt)}<span class="Apple-converted-space">  </span>→<span class="Apple-converted-space">  </span>${s.to}<span class="Apple-converted-space">  </span>${fmt(s.arriveAt)}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>Duración: ${s.duration || '-'}`</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>).join('\n\n');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const content = [</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>legsOutText || 'Sin detalle de ida.',</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">          </span>r.hasReturn ? (legsRetText || 'Sin detalle de vuelta.') : ''</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>].filter(Boolean).join('\n\n');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>trDet.innerHTML = `&lt;td colspan="8"&gt;&lt;div style="display:none" id="det-${idx}"&gt;&lt;pre&gt;${content}&lt;/pre&gt;&lt;/div&gt;&lt;/td&gt;`;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>tbody.appendChild(trDet);</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>});</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>// toggle de detalles (se registra una sola vez por render)</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>tbody.addEventListener('click', (ev) =&gt; {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const btn = ev.target.closest('.btn-detalles');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>if (!btn) return;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const i = btn.getAttribute('data-idx');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const panel = document.getElementById(`det-${i}`);</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>const visible = panel.style.display !== 'none';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>panel.style.display = visible ? 'none' : 'block';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">        </span>btn.textContent = visible ? 'Ver detalles' : 'Ocultar';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>}, { once: true });</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e; min-height: 24.0px"><span class="s1"><i></i></span><br></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>msg.className = 'ok';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>msg.textContent = 'Listo.';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>if (sum) sum.textContent = `${resultados.length} resultado(s).`;</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>tabla.style.display = '';</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>end();</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>} catch (e) {</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>console.error(e);</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">      </span>fail('Error de red o servidor.');</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">    </span>}</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i><span class="Apple-converted-space">  </span>});</i></span></h1>
+<h1 style="margin: 0.0px 0.0px 8.0px 0.0px; font: 24.0px Helvetica; color: #0e0e0e; -webkit-text-stroke: #0e0e0e"><span class="s1"><i>&lt;/script&gt;</i></span></h1>
 </body>
 </html>
