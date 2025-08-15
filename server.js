@@ -30,6 +30,12 @@ app.get('/', (_req, res) => {
 
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+// Ruta de verificación de HTML (debug)
+app.get('/__htmltest', (_req, res) => {
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.send('<!doctype html><html><head><meta charset="utf-8"><title>TEST</title></head><body><h1>OK HTML ✅</h1><p>Si ves esto formateado, el servidor sí entrega HTML.</p></body></html>');
+});
+
 
 // ---------- Amadeus (sandbox) ----------
 const AMADEUS_ID = (process.env.AMADEUS_CLIENT_ID || '').trim();
