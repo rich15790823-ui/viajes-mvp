@@ -163,10 +163,34 @@ form.addEventListener('submit', async (e)=>{
     fail('Error de red o servidor.');
   }
 });
-/* ========= AUTOCOMPLETE 100% en JS (sin editar HTML) — versión UI mejorada ========= */
-// Inyecta CSS del dropdown (paleta personalizada)
-(() => {
   const css = `
+  .ac-float{
+    position:absolute !important; z-index:99999 !important; background:#ffffff !important;
+    border:1px solid #E6E7EA !important; border-radius:12px !important;
+    box-shadow:0 16px 40px rgba(0,0,0,.18) !important;
+    max-height:320px !important; overflow:auto !important; display:none !important;
+    font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif !important;
+  }
+  .ac-header{
+    padding:8px 12px !important; font-size:12px !important; color:#6b7280 !important;
+    border-bottom:1px solid #F0F1F3 !important; background:#fafafa !important;
+    position:sticky !important; top:0 !important;
+  }
+  .ac-item{
+    padding:10px 12px !important; cursor:pointer !important; display:flex !important;
+    align-items:center !important; gap:10px !important;
+  }
+  .ac-item:hover, .ac-item.active{ background:#eef5ff !important; }
+  .ac-item .text{display:flex !important; flex-direction:column !important; line-height:1.1 !important}
+  .ac-title{ font-size:14px !important; color:#001f54 !important; font-weight:700 !important; }
+  .ac-meta{ font-size:12px !important; color:#6b7280 !important; }
+  .ac-pill{
+    margin-left:auto !important; font-size:12px !important; min-width:46px !important; text-align:center !important;
+    background:#b42150 !important; color:#fff !important; border-radius:999px !important; padding:4px 8px !important;
+    font-weight:800 !important; letter-spacing:.4px !important;
+  }
+  `;
+
   .ac-float{
     position:absolute; z-index:9999; background:#fff;
     border:1px solid #E6E7EA; border-radius:12px;
@@ -314,3 +338,162 @@ function escapeHtml(s){
 // Activa autocomplete en los inputs actuales (SIN cambiar HTML)
 bindFloatingAutocomplete('origin');
 bindFloatingAutocomplete('destination');
+/* ========= AUTOCOMPLETE con Shadow DOM (aislado, sin afectar estilos globales) ========= */
+function createShadowDropdown() {
+  const host = document.createElement('div');
+  host.style.position = 'absolute';
+  host.style.zIndex = '99999';
+  host.style.display = 'none';
+  host.style.left = '0px';
+  host.style.top = '0px';
+  host.style.width = '240px';
+  document.body.appendChild(host);
+
+  const shadow = host.attachShadow({ mode: 'open' });
+  const style = document.createElement('style');
+  style.textContent = `
+    :host { all: initial; } /* aísla TODAS las herencias */
+    .box{
+      all: unset;
+      display: block;
+      background: #fff;
+      border: 1px solid #E6E7EA;
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0,0,0,.15);
+      max-height: 320px;
+      overflow: auto;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .hdr{ position: sticky; top:0; background:#fafafa; border-bottom:1px solid #F0F1F3; padding:8px 12px; font-size:12px; color:#6b7280; }
+    .itm{ display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; }
+    .itm:hover, .itm.active{ background:#eef5ff; }
+    .text{ display:flex; flex-direction:column; line-height:1.1; }
+    .ttl{ font-size:14px; color:#001f54; font-weight:700; }
+    .meta{ font-size:12px; color:#6b7280; }
+    .pill{
+      margin-left:auto; font-size:12px; min-width:46px; text-align:center;
+      background:#b42150; color:#fff; border-radius:999px; padding:4px 8px; font-weight:800; letter-spacing:.4px;
+    }
+    .empty{ padding:12px; color:#6b7280; font-size:13px; }
+    /* scrollbars propios (solo dentro del shadow) */
+    ::-webkit-scrollbar{ width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb{ background:#E6E7EA; border-radius:999px; }
+    ::-webkit-scrollbar-thumb:hover{ background:#d6d7da; }
+  `;
+  const wrap = document.createElement('div');
+  wrap.className = 'box';
+  wrap.innerHTML = `<div class="hdr">Sugerencias</div><div id="list"></div>`;
+  shadow.append(style, wrap);
+
+  return { host, shadow, list: wrap.querySelector('#list') };
+}
+
+function positionHostBelowInput(host, input) {
+  const r = input.getBoundingClientRect();
+  host.style.left = Math.round(window.scrollX + r.left) + 'px';
+  host.style.top  = Math.round(window.scrollY + r.bottom + 6) + 'px';
+  host.style.width= Math.round(r.width) + 'px';
+}
+
+function bindShadowAutocomplete(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  const DD = createShadowDropdown();
+  let itemsCache = [];
+  let open = false;
+  let activeIndex = -1;
+
+  function openBox()  { DD.host.style.display = 'block'; open = true; }
+  function closeBox() { DD.host.style.display = 'none'; DD.list.innerHTML = ''; open = false; }
+
+  function render(items) {
+    itemsCache = items || [];
+    activeIndex = -1;
+
+    if (!itemsCache.length) {
+      DD.list.innerHTML = `<div class="empty">Sin coincidencias</div>`;
+    } else {
+      DD.list.innerHTML = itemsCache.map((it, i)=>`
+        <div class="itm" data-i="${i}">
+          <div class="text">
+            <div class="ttl">${escapeHtml(it.name || it.label || '')}</div>
+            <div class="meta">
+              ${it.subType === 'CITY' ? 'Ciudad' : 'Aeropuerto'}
+              ${it.detailed?.cityName ? ' · ' + escapeHtml(it.detailed.cityName) : ''}
+              ${it.detailed?.countryCode ? ' · ' + escapeHtml(it.detailed.countryCode) : ''}
+            </div>
+          </div>
+          <div class="pill">${escapeHtml((it.iataCode || '').toUpperCase())}</div>
+        </div>
+      `).join('');
+    }
+
+    // eventos dentro del shadow
+    [...DD.list.querySelectorAll('.itm')].forEach(el=>{
+      el.addEventListener('mousemove', ()=> setActive(Number(el.getAttribute('data-i'))));
+      el.addEventListener('click',     ()=> select(Number(el.getAttribute('data-i'))));
+    });
+
+    positionHostBelowInput(DD.host, input);
+    openBox();
+  }
+
+  function setActive(i){
+    activeIndex = i;
+    [...DD.list.querySelectorAll('.itm')].forEach((el, idx)=>{
+      el.classList.toggle('active', idx === activeIndex);
+    });
+  }
+
+  function select(i){
+    const sel = itemsCache[i];
+    if (!sel) return;
+    input.value = (sel.iataCode || '').toUpperCase();
+    closeBox();
+    input.dispatchEvent(new Event('input', { bubbles:true }));
+  }
+
+  const deb = (fn, ms)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
+  const onType = deb(async ()=>{
+    const q = input.value.trim();
+    if (q.length < 2) { closeBox(); return; }
+    if (/^[a-z]{3}$/i.test(q)) { closeBox(); return; } // ya es IATA
+    try {
+      const res = await fetch('/api/suggest?q=' + encodeURIComponent(q));
+      const items = res.ok ? await res.json() : [];
+      render(items);
+    } catch(e) { console.error(e); closeBox(); }
+  }, 220);
+
+  input.addEventListener('input', onType);
+  input.addEventListener('focus', onType);
+  input.addEventListener('blur', ()=> setTimeout(closeBox, 150));
+
+  // teclado dentro del input
+  input.addEventListener('keydown', (e)=>{
+    if (!open) return;
+    const total = itemsCache.length;
+    if (e.key === 'ArrowDown'){
+      e.preventDefault(); setActive((activeIndex + 1) % Math.max(1, total));
+    } else if (e.key === 'ArrowUp'){
+      e.preventDefault(); setActive((activeIndex - 1 + Math.max(1, total)) % Math.max(1, total));
+    } else if (e.key === 'Enter'){
+      if (activeIndex >= 0 && activeIndex < total){ e.preventDefault(); select(activeIndex); }
+    } else if (e.key === 'Escape'){
+      closeBox();
+    }
+  });
+
+  // reposicionar si la página se mueve/redimensiona
+  window.addEventListener('scroll', ()=> { if(open) positionHostBelowInput(DD.host, input); }, true);
+  window.addEventListener('resize', ()=> { if(open) positionHostBelowInput(DD.host, input); });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// activar (SIN cambiar HTML)
+bindShadowAutocomplete('origin');
+bindShadowAutocomplete('destination');
