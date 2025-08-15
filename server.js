@@ -212,10 +212,6 @@ app.listen(PORT, '0.0.0.0', () => {
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 
-const path = require('path');
-
-const app = express();
-
 // Sirve /public como estático
 app.use(express.static(path.join(__dirname, 'public')));
 
