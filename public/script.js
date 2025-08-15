@@ -163,80 +163,152 @@ form.addEventListener('submit', async (e)=>{
     fail('Error de red o servidor.');
   }
 });
-
-/* ========= AUTOCOMPLETE 100% en JS (sin editar HTML) ========= */
-// Inyecta el CSS del dropdown
+/* ========= AUTOCOMPLETE 100% en JS (sin editar HTML) — versión UI mejorada ========= */
+// Inyecta CSS del dropdown (paleta personalizada)
 (() => {
   const css = `
-  .ac-float{position:absolute; z-index:9999; background:#fff; border:1px solid #E6E7EA; border-radius:10px;
-    box-shadow:0 10px 24px rgba(0,0,0,.12); max-height:280px; overflow:auto; display:none;}
-  .ac-item{padding:10px 12px; cursor:pointer; font-size:14px;}
-  .ac-item:hover{background:#f3f6ff;}
-  .ac-empty{padding:10px 12px; color:#6b7280; font-size:13px;}
+  .ac-float{
+    position:absolute; z-index:9999; background:#fff;
+    border:1px solid #E6E7EA; border-radius:12px;
+    box-shadow:0 16px 40px rgba(0,0,0,.15); max-height:320px; overflow:auto; display:none;
+  }
+  .ac-header{ padding:8px 12px; font-size:12px; color:#6b7280; border-bottom:1px solid #F0F1F3; }
+  .ac-item{
+    padding:10px 12px; cursor:pointer; display:flex; align-items:center; gap:10px;
+  }
+  .ac-item:hover, .ac-item.active{ background: #eef5ff; }
+  .ac-item .text{display:flex; flex-direction:column; line-height:1.1}
+  .ac-title{ font-size:14px; color:#001f54; font-weight:600; }
+  .ac-meta{ font-size:12px; color:#6b7280; }
+  .ac-pill{
+    margin-left:auto; font-size:12px; min-width:46px; text-align:center;
+    background:#b42150; color:#fff; border-radius:999px; padding:4px 8px;
+    font-weight:700; letter-spacing:0.5px;
+  }
+  .ac-empty{ padding:12px; color:#6b7280; font-size:13px; }
   `;
   const s = document.createElement('style');
   s.textContent = css;
   document.head.appendChild(s);
 })();
 
-async function acFetchSuggest(q){
-  const res = await fetch('/api/suggest?q=' + encodeURIComponent(q));
-  if(!res.ok) return [];
-  return await res.json();
+function acFetchSuggest(q){
+  return fetch('/api/suggest?q=' + encodeURIComponent(q))
+    .then(r => r.ok ? r.json() : [])
+    .catch(() => []);
 }
+
 function acCreateListEl(){
   const el = document.createElement('div');
   el.className = 'ac-float';
+  el.innerHTML = `<div class="ac-header">Sugerencias</div>`;
   document.body.appendChild(el);
   return el;
 }
 function acPlaceListUnderInput(listEl, input){
   const r = input.getBoundingClientRect();
   listEl.style.left   = Math.round(window.scrollX + r.left) + 'px';
-  listEl.style.top    = Math.round(window.scrollY + r.bottom + 4) + 'px';
+  listEl.style.top    = Math.round(window.scrollY + r.bottom + 6) + 'px';
   listEl.style.width  = Math.round(r.width) + 'px';
 }
-function acClose(listEl){ listEl.style.display='none'; listEl.innerHTML=''; }
-function acOpen(listEl){ listEl.style.display='block'; }
+function acClose(listEl){ listEl.style.display='none'; listEl._open = false; }
+function acOpen(listEl){ listEl.style.display='block'; listEl._open = true; }
 
 function bindFloatingAutocomplete(inputId){
   const input = document.getElementById(inputId);
   if(!input) return;
+
   const listEl = acCreateListEl();
+  let itemsCache = [];
+  let activeIndex = -1;
 
   function render(items){
-    if(!items.length){
-      listEl.innerHTML = `<div class="ac-empty">Sin coincidencias</div>`;
-      acPlaceListUnderInput(listEl, input);
-      acOpen(listEl);
-      return;
-    }
-    listEl.innerHTML = items.map((it, idx)=>`<div class="ac-item" data-idx="${idx}">${it.label}</div>`).join('');
+    itemsCache = items;
+    activeIndex = -1;
+
+    const inner = items.length
+      ? items.map((it, idx)=>`
+        <div class="ac-item" data-idx="${idx}">
+          <div class="text">
+            <div class="ac-title">${escapeHtml(it.name || it.label || '')}</div>
+            <div class="ac-meta">
+              ${it.subType === 'CITY' ? 'Ciudad' : 'Aeropuerto'}
+              ${it.detailed?.cityName ? ' · ' + escapeHtml(it.detailed.cityName) : ''}
+              ${it.detailed?.countryCode ? ' · ' + escapeHtml(it.detailed.countryCode) : ''}
+            </div>
+          </div>
+          <div class="ac-pill">${escapeHtml((it.iataCode || '').toUpperCase())}</div>
+        </div>
+      `).join('')
+      : `<div class="ac-empty">Sin coincidencias</div>`;
+
+    listEl.innerHTML = `<div class="ac-header">Sugerencias</div>${inner}`;
     acPlaceListUnderInput(listEl, input);
     acOpen(listEl);
+
     [...listEl.querySelectorAll('.ac-item')].forEach(el=>{
+      el.addEventListener('mousemove', ()=>{
+        setActive(Number(el.getAttribute('data-idx')));
+      });
       el.addEventListener('click', ()=>{
         const i = Number(el.getAttribute('data-idx'));
-        const sel = items[i];
-        input.value = (sel?.iataCode || '').toUpperCase();
-        acClose(listEl);
-        input.dispatchEvent(new Event('input', { bubbles:true }));
+        select(i);
       });
     });
+  }
+
+  function setActive(i){
+    activeIndex = i;
+    [...listEl.querySelectorAll('.ac-item')].forEach((el, idx) => {
+      el.classList.toggle('active', idx === activeIndex);
+    });
+  }
+
+  function select(i){
+    const sel = itemsCache[i];
+    if(!sel) return;
+    input.value = (sel.iataCode || '').toUpperCase();
+    acClose(listEl);
+    input.dispatchEvent(new Event('input', { bubbles:true }));
   }
 
   const onType = debounce(async ()=>{
     const q = input.value.trim();
     if(q.length < 2){ acClose(listEl); return; }
     if(/^[a-z]{3}$/i.test(q)){ acClose(listEl); return; } // ya es IATA
-    try{ render(await acFetchSuggest(q)); }catch(e){ console.error(e); acClose(listEl); }
-  }, 250);
+    const items = await acFetchSuggest(q);
+    render(items);
+  }, 220);
+
+  // Teclado: ↑ ↓ Enter Esc
+  input.addEventListener('keydown', (e)=>{
+    if(!listEl._open) return;
+    const total = itemsCache.length;
+    if(e.key === 'ArrowDown'){
+      e.preventDefault();
+      setActive((activeIndex + 1) % Math.max(1, total));
+    } else if(e.key === 'ArrowUp'){
+      e.preventDefault();
+      setActive((activeIndex - 1 + Math.max(1, total)) % Math.max(1, total));
+    } else if(e.key === 'Enter'){
+      if(activeIndex >= 0 && activeIndex < total){
+        e.preventDefault();
+        select(activeIndex);
+      }
+    } else if(e.key === 'Escape'){
+      acClose(listEl);
+    }
+  });
 
   input.addEventListener('input', onType);
   input.addEventListener('focus', onType);
-  input.addEventListener('blur', ()=> setTimeout(()=> acClose(listEl), 150));
-  window.addEventListener('scroll', ()=> { if(listEl.style.display!=='none') acPlaceListUnderInput(listEl, input); }, true);
-  window.addEventListener('resize', ()=> { if(listEl.style.display!=='none') acPlaceListUnderInput(listEl, input); });
+  input.addEventListener('blur', ()=> setTimeout(() => acClose(listEl), 150));
+  window.addEventListener('scroll', ()=> { if(listEl._open) acPlaceListUnderInput(listEl, input); }, true);
+  window.addEventListener('resize', ()=> { if(listEl._open) acPlaceListUnderInput(listEl, input); });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
 // Activa autocomplete en los inputs actuales (SIN cambiar HTML)
