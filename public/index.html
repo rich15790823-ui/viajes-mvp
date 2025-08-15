@@ -1,5 +1,94 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Navuara · Vuelos MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/style.css?v=3" />
+</head>
+<body>
+  <h1>Buscador de Vuelos (MVP)</h1>
+  <p class="hint">Ejemplo: escribe <b>Cancún</b> o <b>Madrid</b> (no necesitas saber el código).</p>
+
+  <form id="form">
+    <div>
+      <label for="origin">Origen</label>
+      <input id="origin" name="origin" maxlength="50" autocomplete="off" />
+      <ul id="originList" class="autocomplete"></ul>
+    </div>
+    <div>
+      <label for="destination">Destino</label>
+      <input id="destination" name="destination" maxlength="50" autocomplete="off" />
+      <ul id="destinationList" class="autocomplete"></ul>
+    </div>
+    <div>
+      <label for="date">Salida</label>
+      <input id="date" name="date" type="date" />
+    </div>
+    <div>
+      <label for="adults">Adultos</label>
+      <input id="adults" name="adults" type="number" min="1" value="1" />
+    </div>
+    <div>
+      <label for="currency">Moneda</label>
+      <select id="currency" name="currency">
+        <option value="USD">USD</option>
+        <option value="MXN">MXN</option>
+        <option value="EUR">EUR</option>
+      </select>
+    </div>
+    <div>
+      <label><input type="checkbox" id="roundTrip" /> Ida y vuelta</label>
+      <div id="returnDateWrap" style="display:none;">
+        <label for="returnDate">Regreso</label>
+        <input id="returnDate" name="returnDate" type="date" />
+      </div>
+    </div>
+
+    <div class="row-full">
+      <button id="btn" type="submit">Buscar</button>
+      <span id="msg" class="muted"></span>
+    </div>
+  </form>
+
+  <div id="controls" class="controls" style="display:none;">
+    <div class="left">
+      <label>Ordenar por</label>
+      <select id="sort">
+        <option value="priceAsc">Precio ↑</option>
+        <option value="priceDesc">Precio ↓</option>
+        <option value="durAsc">Duración ↑</option>
+        <option value="durDesc">Duración ↓</option>
+        <option value="depAsc">Salida ↑</option>
+        <option value="depDesc">Salida ↓</option>
+      </select>
+      <label><input type="checkbox" id="directOnly" /> Solo directos</label>
+      <label>Aerolínea</label>
+      <select id="airline"></select>
+    </div>
+    <div class="right"><span id="sum" class="muted"></span></div>
+  </div>
+
+  <table id="tabla" style="display:none;">
+    <thead>
+      <tr>
+        <th>Aerolínea</th>
+        <th>Salida</th>
+        <th>Llegada</th>
+        <th>Duración</th>
+        <th>Escalas</th>
+        <th>Regreso</th>
+        <th>Precio</th>
+        <th>Detalles</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <script src="/script.js?v=3" defer></script>
+</body>
+</html>
+>
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <meta http-equiv="Content-Style-Type" content="text/css">
