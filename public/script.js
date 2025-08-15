@@ -1,6 +1,5 @@
-console.log('SCRIPT ACTUAL ✅ build=', Date.now());
-
 // =================== script.js limpio ===================
+console.log('SCRIPT ACTUAL ✅ build=', Date.now());
 console.log('script.js cargado ✅');
 
 /* ========= Helpers ========= */
@@ -13,11 +12,9 @@ function durationToMin(iso){
   return (Number(m[1]||0)*60)+(Number(m[2]||0));
 }
 function debounce(fn, ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
-/* ========= Refs al DOM ========= */
+/* ========= Refs ========= */
 const form = document.getElementById('form');
 const btn  = document.getElementById('btn');
 const msg  = document.getElementById('msg');
@@ -36,7 +33,7 @@ const airlineSel = document.getElementById('airline');     // opcional
 /* ========= Estado ========= */
 let lastResults = [];
 
-/* ========= Render de resultados, filtros y detalles ========= */
+/* ========= Render resultados ========= */
 function renderResults(list){
   if (!tbody) return;
   tbody.innerHTML='';
@@ -75,26 +72,27 @@ function renderResults(list){
   });
 }
 
-// Toggle detalles (delegado, permite abrir/cerrar múltiples filas)
+// Toggle detalles (delegado)
 if (tbody) {
   tbody.addEventListener('click', (ev)=>{
     const b = ev.target.closest('.btn-detalles');
     if(!b) return;
     const i = b.getAttribute('data-idx');
     const panel = document.getElementById('det-'+i);
-    const visible = panel && panel.style.display !== 'none';
     if (!panel) return;
+    const visible = panel.style.display !== 'none';
     panel.style.display = visible ? 'none' : 'block';
     b.textContent = visible ? 'Ver detalles' : 'Ocultar';
   });
 }
 
-// Filtros opcionales (se activan si existen en tu HTML)
+/* ========= Filtros (opcionales) ========= */
 function populateAirlines(list){
   if(!airlineSel) return;
   const uniq = Array.from(new Set(list.map(r => r.airline || '').filter(Boolean))).sort();
   airlineSel.innerHTML = '<option value="">Todas</option>' + uniq.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
 }
+function durationToMinSafe(d){ const x=durationToMin(d); return isFinite(x)?x:9999999; }
 function applyFiltersSort(){
   if(!lastResults.length || !tabla) return;
   let arr = [...lastResults];
@@ -105,8 +103,8 @@ function applyFiltersSort(){
   arr.sort((a,b)=>{
     if(key==='priceAsc')  return Number(a.priceTotal||Infinity) - Number(b.priceTotal||Infinity);
     if(key==='priceDesc') return Number(b.priceTotal||-Infinity) - Number(a.priceTotal||-Infinity);
-    if(key==='durAsc')    return durationToMin(a.duration) - durationToMin(b.duration);
-    if(key==='durDesc')   return durationToMin(b.duration) - durationToMin(a.duration);
+    if(key==='durAsc')    return durationToMinSafe(a.duration) - durationToMinSafe(b.duration);
+    if(key==='durDesc')   return durationToMinSafe(b.duration) - durationToMinSafe(a.duration);
     if(key==='depAsc')    return new Date(a.departureAt) - new Date(b.departureAt);
     if(key==='depDesc')   return new Date(b.departureAt) - new Date(a.departureAt);
     return 0;
@@ -119,13 +117,9 @@ sortSel?.addEventListener('change', applyFiltersSort);
 directOnly?.addEventListener('change', applyFiltersSort);
 airlineSel?.addEventListener('change', applyFiltersSort);
 
-/* ========= Submit (búsqueda) ========= */
+/* ========= Submit ========= */
 function fail(text){ if(msg){ msg.className='error'; msg.textContent=text; } end(); }
-function end(){
-  if(btn){
-    btn.disabled=false; btn.classList.remove('loading'); btn.textContent='Buscar';
-  }
-}
+function end(){ if(btn){ btn.disabled=false; btn.classList.remove('loading'); btn.textContent='Buscar'; } }
 
 if (returnDateWrap && roundTripCheckbox) {
   returnDateWrap.style.display = roundTripCheckbox.checked ? 'block' : 'none';
@@ -173,10 +167,10 @@ if (form) {
         return end();
       }
       lastResults = resultados;
-      populateAirlines(lastResults); // si hay select de aerolíneas
+      populateAirlines(lastResults);
       if (controls) controls.style.display = 'flex';
       if(msg){ msg.className='ok'; msg.textContent='Listo.'; }
-      applyFiltersSort(); // pinta y aplica orden seleccionado (si existe)
+      applyFiltersSort();
       end();
     }catch(err){
       console.error(err);
@@ -185,7 +179,7 @@ if (form) {
   });
 }
 
-/* ========= AUTOCOMPLETE AISLADO con Shadow DOM (no altera estilos globales) ========= */
+/* ========= AUTOCOMPLETE con Shadow DOM (aislado) ========= */
 function createShadowDropdown() {
   const host = document.createElement('div');
   host.style.position = 'absolute';
@@ -199,7 +193,7 @@ function createShadowDropdown() {
   const shadow = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = `
-    :host { all: initial; } /* aísla TODA herencia */
+    :host { all: initial; }
     .box{
       all: initial;
       display: block;
@@ -223,10 +217,7 @@ function createShadowDropdown() {
       background:#b42150; color:#fff; border-radius:999px; padding:4px 8px; font-weight:800; letter-spacing:.4px;
     }
     .empty{ padding:12px; color:#6b7280; font-size:13px; }
-    /* scrollbars dentro del shadow */
-    ::-webkit-scrollbar{ width:10px; height:10px; }
-    ::-webkit-scrollbar-thumb{ background:#E6E7EA; border-radius:999px; }
-    ::-webkit-scrollbar-thumb:hover{ background:#d6d7da; }
+    ::-webkit-scrollbar{ width:10px; height:10px; } ::-webkit-scrollbar-thumb{ background:#E6E7EA; border-radius:999px; } ::-webkit-scrollbar-thumb:hover{ background:#d6d7da; }
   `;
   const wrap = document.createElement('div');
   wrap.className = 'box';
@@ -235,14 +226,12 @@ function createShadowDropdown() {
 
   return { host, shadow, list: wrap.querySelector('#list') };
 }
-
 function positionHostBelowInput(host, input) {
   const r = input.getBoundingClientRect();
   host.style.left = Math.round(window.scrollX + r.left) + 'px';
   host.style.top  = Math.round(window.scrollY + r.bottom + 6) + 'px';
   host.style.width= Math.round(r.width) + 'px';
 }
-
 function bindShadowAutocomplete(inputId) {
   const input = document.getElementById(inputId);
   if (!input) return;
@@ -277,7 +266,6 @@ function bindShadowAutocomplete(inputId) {
       `).join('');
     }
 
-    // eventos dentro del shadow
     [...DD.list.querySelectorAll('.itm')].forEach(el=>{
       el.addEventListener('mousemove', ()=> setActive(Number(el.getAttribute('data-i'))));
       el.addEventListener('click', ()=> select(Number(el.getAttribute('data-i'))));
@@ -286,14 +274,12 @@ function bindShadowAutocomplete(inputId) {
     positionHostBelowInput(DD.host, input);
     openBox();
   }
-
   function setActive(i){
     activeIndex = i;
     [...DD.list.querySelectorAll('.itm')].forEach((el, idx)=>{
       el.classList.toggle('active', idx === activeIndex);
     });
   }
-
   function select(i){
     const sel = itemsCache[i];
     if (!sel) return;
@@ -316,8 +302,6 @@ function bindShadowAutocomplete(inputId) {
   input.addEventListener('input', onType);
   input.addEventListener('focus', onType);
   input.addEventListener('blur', ()=> setTimeout(closeBox, 150));
-
-  // teclado
   input.addEventListener('keydown', (e)=>{
     if (!isOpen) return;
     const total = itemsCache.length;
@@ -332,13 +316,10 @@ function bindShadowAutocomplete(inputId) {
     }
   });
 
-  // reposición si la página cambia
   window.addEventListener('scroll', ()=> { if(isOpen) positionHostBelowInput(DD.host, input); }, true);
   window.addEventListener('resize', ()=> { if(isOpen) positionHostBelowInput(DD.host, input); });
 }
-
-// Activar (SIN cambiar HTML)
+// Activar
 bindShadowAutocomplete('origin');
 bindShadowAutocomplete('destination');
-
 // =================== fin script.js ===================
