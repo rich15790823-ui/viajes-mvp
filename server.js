@@ -209,3 +209,25 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server on http://0.0.0.0:${PORT}`);
 });
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
+const express = require('express');
+const path = require('path');
+
+const app = express();
+
+// Sirve /public como estático
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Home -> index.html
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Health
+app.get('/health', (_req, res) => res.json({ ok: true }));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server http://0.0.0.0:${PORT}`);
+});
