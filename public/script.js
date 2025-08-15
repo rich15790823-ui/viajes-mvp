@@ -1,3 +1,5 @@
+console.log('SCRIPT ACTUAL ✅ build=', Date.now());
+
 // =================== script.js limpio ===================
 console.log('script.js cargado ✅');
 
