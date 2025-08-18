@@ -25,13 +25,24 @@ const destInput = $("#destination");
 const destList = $("#destinationList");
 
 // Mostrar/ocultar regreso
-roundTripCheckbox.addEventListener("change", () => {
+roundTripCheckbox?.addEventListener("change", () => {
+  if (!returnDateWrap) return;
   returnDateWrap.style.display = roundTripCheckbox.checked ? "block" : "none";
 });
 
-// Autocompletado
+// ============ AUTOCOMPLETADO ============
 let suggestTimer = null;
+
+async function fetchSuggest(q) {
+  const res = await fetch(`/api/suggest?q=${encodeURIComponent(q)}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
 function bindAutocomplete(input, listEl) {
+  if (!input || !listEl) return;
+
   input.addEventListener("input", () => {
     const q = input.value.trim();
     if (q.length < 2) {
@@ -42,30 +53,29 @@ function bindAutocomplete(input, listEl) {
     clearTimeout(suggestTimer);
     suggestTimer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/suggest?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
+        const items = await fetchSuggest(q);
         listEl.innerHTML = "";
-        (data || []).forEach(item => {
+        items.forEach(item => {
           const li = document.createElement("li");
           const city = item.detailed?.cityName || item.name || "";
           const code = (item.iataCode || "").toUpperCase();
           li.textContent = `${city} • ${code}`;
           li.addEventListener("click", () => {
-            input.value = code;            // rellenamos con el IATA
+            input.value = code; // Rellenamos el IATA
             listEl.style.display = "none";
             listEl.innerHTML = "";
           });
           listEl.appendChild(li);
         });
-        listEl.style.display = data?.length ? "block" : "none";
+        listEl.style.display = items.length ? "block" : "none";
       } catch (e) {
         console.error("suggest error", e);
         listEl.style.display = "none";
       }
-    }, 300);
+    }, 250);
   });
 
-  // Ocultar la lista si haces click fuera
+  // Cierra la lista al hacer click fuera
   document.addEventListener("click", (ev) => {
     if (!listEl.contains(ev.target) && ev.target !== input) {
       listEl.style.display = "none";
@@ -76,11 +86,26 @@ function bindAutocomplete(input, listEl) {
 bindAutocomplete(originInput, originList);
 bindAutocomplete(destInput, destList);
 
-// Estado de resultados actual (para ordenar/filtrar)
+// ============ RESOLVER NOMBRE → IATA EN EL SUBMIT ============
+async function resolveToIATA(value) {
+  // Si ya parece IATA (3 letras) lo devolvemos
+  if (/^[A-Za-z]{3}$/.test(value)) return value.toUpperCase();
+
+  // Si es un nombre como "Cancún" / "Madrid", consultamos suggest
+  try {
+    const items = await fetchSuggest(value);
+    const best = items.find(x => x.iataCode) || items[0];
+    return best?.iataCode ? best.iataCode.toUpperCase() : "";
+  } catch {
+    return "";
+  }
+}
+
+// Estado de resultados actual
 let currentResults = [];
 
-// Submit búsqueda
-form.addEventListener("submit", async (e) => {
+// ============ SUBMIT ============
+form?.addEventListener("submit", async (e) => {
   e.preventDefault();
   setLoading(true);
   msg.className = "muted";
@@ -89,18 +114,24 @@ form.addEventListener("submit", async (e) => {
   tbody.innerHTML = "";
   controls.style.display = "none";
 
-  const origin = originInput.value.trim().toUpperCase();
-  const destination = destInput.value.trim().toUpperCase();
+  // Tomamos lo que escribió el usuario (puede ser ciudad o IATA)
+  const originRaw = originInput.value.trim();
+  const destRaw = destInput.value.trim();
+
+  // Convertimos a IATA si es necesario
+  const origin = await resolveToIATA(originRaw);
+  const destination = await resolveToIATA(destRaw);
+
   const date = $("#date").value.trim();
   const adults = ($("#adults").value || "1").trim();
   const currency = $("#currency").value;
-  const returnDate = roundTripCheckbox.checked ? ($("#returnDate").value || "").trim() : "";
+  const returnDate = roundTripCheckbox?.checked ? ($("#returnDate")?.value || "").trim() : "";
 
-  // Validaciones
-  if (!/^[A-Z]{3}$/.test(origin)) return fail("Origen inválido (usa el autocompletado).");
-  if (!/^[A-Z]{3}$/.test(destination)) return fail("Destino inválido (usa el autocompletado).");
+  // Validaciones (ya sobre IATA)
+  if (!/^[A-Z]{3}$/.test(origin)) return fail("Origen inválido (elige una opción del autocompletado).");
+  if (!/^[A-Z]{3}$/.test(destination)) return fail("Destino inválido (elige una opción del autocompletado).");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("Salida inválida (YYYY-MM-DD).");
-  if (roundTripCheckbox.checked && !/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) return fail("Regreso inválido (YYYY-MM-DD).");
+  if (roundTripCheckbox?.checked && !/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) return fail("Regreso inválido (YYYY-MM-DD).");
 
   try {
     const q = new URLSearchParams({ origin, destination, date, adults, currency });
@@ -111,7 +142,7 @@ form.addEventListener("submit", async (e) => {
 
     if (!res.ok) {
       msg.className = "error";
-      msg.textContent = res.status === 504 ? "Timeout. Prueba otra fecha." : (data?.error || "Error en la búsqueda.");
+      msg.textContent = res.status === 504 ? "La búsqueda tardó demasiado (timeout). Prueba otra fecha." : (data?.error || "Error en la búsqueda.");
       setLoading(false);
       return;
     }
@@ -125,7 +156,7 @@ form.addEventListener("submit", async (e) => {
     }
 
     currentResults = resultados;
-    renderResults(); // pinta tabla con filtros/orden
+    renderResults();
     msg.className = "ok";
     msg.textContent = `Listo: ${resultados.length} resultado(s).`;
     controls.style.display = "";
@@ -151,22 +182,19 @@ function setLoading(v) {
   btn.textContent = v ? "Buscando…" : "Buscar";
 }
 
-// Orden y filtros
-sortSel.addEventListener("change", renderResults);
-directOnly.addEventListener("change", renderResults);
-airlineSel.addEventListener("change", renderResults);
+// ============ ORDEN / FILTROS ============
+sortSel?.addEventListener("change", renderResults);
+directOnly?.addEventListener("change", renderResults);
+airlineSel?.addEventListener("change", renderResults);
 
 function renderResults() {
-  // Filtro directos / aerolínea
   let arr = [...currentResults];
-  if (directOnly.checked) arr = arr.filter(r => (r.stops || 0) === 0);
+  if (directOnly?.checked) arr = arr.filter(r => (r.stops || 0) === 0);
 
-  // Aerolínea
-  const selAir = airlineSel.value || "";
+  const selAir = airlineSel?.value || "";
   if (selAir) arr = arr.filter(r => (r.airlineCode || "") === selAir);
 
-  // Orden
-  const key = sortSel.value;
+  const key = sortSel?.value || "priceAsc";
   arr.sort((a, b) => {
     const pa = Number(a.priceTotal || 0), pb = Number(b.priceTotal || 0);
     const da = a.duration || "", db = b.duration || "";
@@ -181,11 +209,11 @@ function renderResults() {
     return 0;
   });
 
-  // Construir selector de aerolínea (único)
   const codes = [...new Set(currentResults.map(r => r.airlineCode).filter(Boolean))].sort();
-  airlineSel.innerHTML = `<option value="">Todas</option>` + codes.map(c => `<option value="${c}">${c}</option>`).join("");
+  if (airlineSel) {
+    airlineSel.innerHTML = `<option value="">Todas</option>` + codes.map(c => `<option value="${c}">${c}</option>`).join("");
+  }
 
-  // Pintar tabla
   tbody.innerHTML = "";
   arr.forEach((r, idx) => {
     const price = r.priceTotal ? `${r.currency || "USD"} ${num(r.priceTotal)}` : "-";
@@ -233,7 +261,7 @@ function renderResults() {
     tbody.appendChild(trDet);
   });
 
-  // toggles (delegado — permite abrir/cerrar varias veces)
+  // Toggle detalles (puedes abrir/cerrar cualquier fila cuantas veces quieras)
   tbody.onclick = (ev) => {
     const btn = ev.target.closest(".btn-detalles");
     if (!btn) return;
@@ -244,5 +272,5 @@ function renderResults() {
     btn.textContent = visible ? "Ver detalles" : "Ocultar";
   };
 
-  sum.textContent = `Mostrando ${arr.length} de ${currentResults.length} resultados.`;
+  if (sum) sum.textContent = `Mostrando ${arr.length} de ${currentResults.length} resultados.`;
 }
