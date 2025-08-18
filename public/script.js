@@ -5,10 +5,9 @@ const $ = (sel) => document.querySelector(sel);
 const fmt = (iso) => !iso ? '-' : new Date(iso).toLocaleString();
 const num = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// ISO-8601 (P[n]DT[n]H[n]M[n]S) -> "1 d 2 h 30 min"
+// ISO-8601 -> "1 d 2 h 30 min"
 function fmtDuration(iso) {
   if (!iso || typeof iso !== 'string') return '-';
-  // Ejemplos: PT7H55M, PT4H, PT35M, P1DT2H5M
   const re = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/i;
   const m = iso.match(re);
   if (!m) return iso;
@@ -80,7 +79,7 @@ function bindAutocomplete(input, listEl) {
           const code = (item.iataCode || "").toUpperCase();
           li.textContent = `${city} • ${code}`;
           li.addEventListener("click", () => {
-            input.value = code; // Rellenamos IATA
+            input.value = code; // rellenamos IATA
             listEl.style.display = "none";
             listEl.innerHTML = "";
           });
@@ -232,23 +231,21 @@ function renderResults() {
       ? `<b>${r.returnArrivalIata || "-"}</b><br><span class="mono">${fmt(r.returnArrivalAt)}</span>`
       : "—";
 
+    const durIda = fmtDuration(r.duration);
+    const durVuelta = r.hasReturn ? fmtDuration(r.returnDuration) : "—";
+
     const tr = document.createElement("tr");
-
-const durIda = fmtDuration(r.duration);                         // duración de la ida
-const durVuelta = r.hasReturn ? fmtDuration(r.returnDuration) : "—"; // duración de la vuelta (si existe)
-
-tr.innerHTML = `
-  <td>${r.airline || "-"}<br><span class="mono">${r.airlineCode || ""}</span></td>
-  <td><b>${r.departureIata || "-"}</b><br><span class="mono">${fmt(r.departureAt)}</span></td>
-  <td><b>${r.arrivalIata || "-"}</b><br><span class="mono">${fmt(r.arrivalAt)}</span></td>
-  <td>${durIda}</td>
-  <td>${r.stops ?? "-"}</td>
-  <td>${regresoCol}</td>
-  <td>${durVuelta}</td>
-  <td>${price}</td>
-  <td><button type="button" class="btn-detalles" data-idx="${idx}">Ver detalles</button></td>
-`;
-
+    tr.innerHTML = `
+      <td>${r.airline || "-"}<br><span class="mono">${r.airlineCode || ""}</span></td>
+      <td><b>${r.departureIata || "-"}</b><br><span class="mono">${fmt(r.departureAt)}</span></td>
+      <td><b>${r.arrivalIata || "-"}</b><br><span class="mono">${fmt(r.arrivalAt)}</span></td>
+      <td>${durIda}</td>
+      <td>${r.stops ?? "-"}</td>
+      <td>${regresoCol}</td>
+      <td>${durVuelta}</td>
+      <td>${price}</td>
+      <td><button type="button" class="btn-detalles" data-idx="${idx}">Ver detalles</button></td>
+    `;
     tbody.appendChild(tr);
 
     // ----- Detalles — tablas por tramo -----
@@ -282,7 +279,7 @@ tr.innerHTML = `
     `).join("");
 
     const idaTable = `
-      <div class="seg-title">IDA</div>
+      <div class="seg-title">IDA (duración ${durIda})</div>
       <table class="seg-table">
         <thead>
           <tr><th>#</th><th>Vuelo</th><th>Desde</th><th>Sale</th><th></th><th>Hasta</th><th>Llega</th><th>Duración</th></tr>
@@ -292,7 +289,7 @@ tr.innerHTML = `
     `;
 
     const vueltaTable = r.hasReturn ? `
-      <div class="seg-title">VUELTA</div>
+      <div class="seg-title">VUELTA (duración ${durVuelta})</div>
       <table class="seg-table">
         <thead>
           <tr><th>#</th><th>Vuelo</th><th>Desde</th><th>Sale</th><th></th><th>Hasta</th><th>Llega</th><th>Duración</th></tr>
@@ -302,7 +299,7 @@ tr.innerHTML = `
     ` : "";
 
     trDet.innerHTML = `
-      <td colspan="8">
+      <td colspan="9">
         <div style="display:none" id="det-${idx}">
           ${idaTable}
           ${vueltaTable}

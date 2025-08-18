@@ -111,25 +111,22 @@ th { background: #f5f7fb; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color:#444; }
 .details td { background: #fbfbfd; }
 
-/* Autocompletado — ancho del input */
+/* Autocompletado */
 .autocomplete {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
   width: 100%;
-
   margin: 0;
   padding: 0;
   list-style: none;
-
   background: #fff;
   border: 1px solid #e8e8ee;
   border-radius: 10px;
   box-shadow: 0 6px 18px rgba(0,0,0,.06);
-
   max-height: 260px;
   overflow: auto;
-  display: none; /* visible por JS */
+  display: none;
   z-index: 20;
   font-size: 14px;
 }
@@ -140,7 +137,7 @@ th { background: #f5f7fb; }
 }
 .autocomplete li:hover { background: #f0f4ff; }
 
-/* Tabla de segmentos en “Ver detalles” */
+/* Tabla segmentos en detalles */
 .seg-table {
   width: 100%;
   border-collapse: collapse;
