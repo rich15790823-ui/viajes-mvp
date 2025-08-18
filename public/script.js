@@ -1,3 +1,12 @@
+// Placeholder por JS (sin tocar HTML)
+document.addEventListener('DOMContentLoaded', () => {
+  const origin = document.getElementById('origin');
+  const destination = document.getElementById('destination');
+  if (origin) origin.setAttribute('placeholder', 'Ciudad o Aeropuerto');
+  if (destination) destination.setAttribute('placeholder', 'Ciudad o Aeropuerto');
+  console.log('✅ Placeholders aplicados por JS');
+});
+
 console.log("script.js Flysky Cards ✅");
 
 const $ = (s) => document.querySelector(s);
