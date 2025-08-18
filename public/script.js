@@ -1,11 +1,30 @@
 console.log("script.js cargado ✅");
 
-// Helpers
+// ===== Helpers =====
 const $ = (sel) => document.querySelector(sel);
 const fmt = (iso) => !iso ? '-' : new Date(iso).toLocaleString();
 const num = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// Elementos
+// ISO-8601 (P[n]DT[n]H[n]M[n]S) -> "1 d 2 h 30 min"
+function fmtDuration(iso) {
+  if (!iso || typeof iso !== 'string') return '-';
+  // Ejemplos: PT7H55M, PT4H, PT35M, P1DT2H5M
+  const re = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/i;
+  const m = iso.match(re);
+  if (!m) return iso;
+  const d = m[1] ? parseInt(m[1], 10) : 0;
+  const h = m[2] ? parseInt(m[2], 10) : 0;
+  const mm = m[3] ? parseInt(m[3], 10) : 0;
+  const s = m[4] ? parseInt(m[4], 10) : 0;
+  const parts = [];
+  if (d) parts.push(`${d} d`);
+  if (h) parts.push(`${h} h`);
+  if (mm) parts.push(`${mm} min`);
+  if (!d && !h && !mm && s) parts.push(`${s} s`);
+  return parts.length ? parts.join(' ') : '0 min';
+}
+
+// ===== Elementos =====
 const form = $("#form");
 const btn = $("#btn");
 const msg = $("#msg");
@@ -30,7 +49,7 @@ roundTripCheckbox?.addEventListener("change", () => {
   returnDateWrap.style.display = roundTripCheckbox.checked ? "block" : "none";
 });
 
-// ============ AUTOCOMPLETADO ============
+// ===== Autocompletado =====
 let suggestTimer = null;
 
 async function fetchSuggest(q) {
@@ -61,7 +80,7 @@ function bindAutocomplete(input, listEl) {
           const code = (item.iataCode || "").toUpperCase();
           li.textContent = `${city} • ${code}`;
           li.addEventListener("click", () => {
-            input.value = code; // Rellenamos el IATA
+            input.value = code; // Rellenamos IATA
             listEl.style.display = "none";
             listEl.innerHTML = "";
           });
@@ -75,7 +94,6 @@ function bindAutocomplete(input, listEl) {
     }, 250);
   });
 
-  // Cierra la lista al hacer click fuera
   document.addEventListener("click", (ev) => {
     if (!listEl.contains(ev.target) && ev.target !== input) {
       listEl.style.display = "none";
@@ -86,12 +104,9 @@ function bindAutocomplete(input, listEl) {
 bindAutocomplete(originInput, originList);
 bindAutocomplete(destInput, destList);
 
-// ============ RESOLVER NOMBRE → IATA EN EL SUBMIT ============
+// Resolver nombre → IATA si el usuario no eligió de la lista
 async function resolveToIATA(value) {
-  // Si ya parece IATA (3 letras) lo devolvemos
   if (/^[A-Za-z]{3}$/.test(value)) return value.toUpperCase();
-
-  // Si es un nombre como "Cancún" / "Madrid", consultamos suggest
   try {
     const items = await fetchSuggest(value);
     const best = items.find(x => x.iataCode) || items[0];
@@ -101,10 +116,10 @@ async function resolveToIATA(value) {
   }
 }
 
-// Estado de resultados actual
+// Estado de resultados
 let currentResults = [];
 
-// ============ SUBMIT ============
+// ===== Submit =====
 form?.addEventListener("submit", async (e) => {
   e.preventDefault();
   setLoading(true);
@@ -114,11 +129,8 @@ form?.addEventListener("submit", async (e) => {
   tbody.innerHTML = "";
   controls.style.display = "none";
 
-  // Tomamos lo que escribió el usuario (puede ser ciudad o IATA)
   const originRaw = originInput.value.trim();
   const destRaw = destInput.value.trim();
-
-  // Convertimos a IATA si es necesario
   const origin = await resolveToIATA(originRaw);
   const destination = await resolveToIATA(destRaw);
 
@@ -127,7 +139,6 @@ form?.addEventListener("submit", async (e) => {
   const currency = $("#currency").value;
   const returnDate = roundTripCheckbox?.checked ? ($("#returnDate")?.value || "").trim() : "";
 
-  // Validaciones (ya sobre IATA)
   if (!/^[A-Z]{3}$/.test(origin)) return fail("Origen inválido (elige una opción del autocompletado).");
   if (!/^[A-Z]{3}$/.test(destination)) return fail("Destino inválido (elige una opción del autocompletado).");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("Salida inválida (YYYY-MM-DD).");
@@ -182,7 +193,7 @@ function setLoading(v) {
   btn.textContent = v ? "Buscando…" : "Buscar";
 }
 
-// ============ ORDEN / FILTROS ============
+// ===== Orden / Filtros =====
 sortSel?.addEventListener("change", renderResults);
 directOnly?.addEventListener("change", renderResults);
 airlineSel?.addEventListener("change", renderResults);
@@ -226,7 +237,7 @@ function renderResults() {
       <td>${r.airline || "-"}<br><span class="mono">${r.airlineCode || ""}</span></td>
       <td><b>${r.departureIata || "-"}</b><br><span class="mono">${fmt(r.departureAt)}</span></td>
       <td><b>${r.arrivalIata || "-"}</b><br><span class="mono">${fmt(r.arrivalAt)}</span></td>
-      <td>${r.duration || "-"}</td>
+      <td>${fmtDuration(r.duration)}</td>
       <td>${r.stops ?? "-"}</td>
       <td>${regresoCol}</td>
       <td>${price}</td>
@@ -234,34 +245,68 @@ function renderResults() {
     `;
     tbody.appendChild(tr);
 
+    // ----- Detalles — tablas por tramo -----
     const trDet = document.createElement("tr");
     trDet.className = "details";
-    const legsOutText = (r.legs || []).map((s, i) =>
-      `IDA ${i+1} — ${s.airlineCode} ${s.flightNumber}
-  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}
-  Duración: ${s.duration || "-"}`
-    ).join("\n\n");
-    const legsRetText = (r.returnLegs || []).map((s, i) =>
-      `VUELTA ${i+1} — ${s.airlineCode} ${s.flightNumber}
-  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}
-  Duración: ${s.duration || "-"}`
-    ).join("\n\n");
-    const content = [
-      legsOutText || "Sin detalle de ida.",
-      r.hasReturn ? (legsRetText || "Sin detalle de vuelta.") : ""
-    ].filter(Boolean).join("\n\n");
+
+    const legsOutRows = (r.legs || []).map((s, i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td>${s.airlineCode || ""} ${s.flightNumber || ""}</td>
+        <td>${s.from || "-"}</td>
+        <td class="mono">${fmt(s.departAt)}</td>
+        <td>→</td>
+        <td>${s.to || "-"}</td>
+        <td class="mono">${fmt(s.arriveAt)}</td>
+        <td>${fmtDuration(s.duration)}</td>
+      </tr>
+    `).join("");
+
+    const legsRetRows = (r.returnLegs || []).map((s, i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td>${s.airlineCode || ""} ${s.flightNumber || ""}</td>
+        <td>${s.from || "-"}</td>
+        <td class="mono">${fmt(s.departAt)}</td>
+        <td>→</td>
+        <td>${s.to || "-"}</td>
+        <td class="mono">${fmt(s.arriveAt)}</td>
+        <td>${fmtDuration(s.duration)}</td>
+      </tr>
+    `).join("");
+
+    const idaTable = `
+      <div class="seg-title">IDA</div>
+      <table class="seg-table">
+        <thead>
+          <tr><th>#</th><th>Vuelo</th><th>Desde</th><th>Sale</th><th></th><th>Hasta</th><th>Llega</th><th>Duración</th></tr>
+        </thead>
+        <tbody>${legsOutRows || `<tr><td colspan="8">Sin detalle de ida.</td></tr>`}</tbody>
+      </table>
+    `;
+
+    const vueltaTable = r.hasReturn ? `
+      <div class="seg-title">VUELTA</div>
+      <table class="seg-table">
+        <thead>
+          <tr><th>#</th><th>Vuelo</th><th>Desde</th><th>Sale</th><th></th><th>Hasta</th><th>Llega</th><th>Duración</th></tr>
+        </thead>
+        <tbody>${legsRetRows || `<tr><td colspan="8">Sin detalle de vuelta.</td></tr>`}</tbody>
+      </table>
+    ` : "";
 
     trDet.innerHTML = `
       <td colspan="8">
         <div style="display:none" id="det-${idx}">
-          <pre>${content}</pre>
+          ${idaTable}
+          ${vueltaTable}
         </div>
       </td>
     `;
     tbody.appendChild(trDet);
   });
 
-  // Toggle detalles (puedes abrir/cerrar cualquier fila cuantas veces quieras)
+  // Toggle detalles (abre/cierra libremente)
   tbody.onclick = (ev) => {
     const btn = ev.target.closest(".btn-detalles");
     if (!btn) return;

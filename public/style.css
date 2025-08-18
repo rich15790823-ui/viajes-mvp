@@ -1,132 +1,124 @@
-/* ====== RESET BÁSICO ====== */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+:root {
+  --primary: #0552AC;
+  --primary-dark: #001F54;
+  --accent: #B42150;
+  --bg: #F7F7F9;
+  --text: #111;
+  --muted: #666;
+  --card: #fff;
+  color-scheme: light;
 }
+
+* { box-sizing: border-box; }
 
 body {
-  font-family: Arial, sans-serif;
-  background: #f5f6fa;
-  color: #333;
-  padding: 20px;
-  line-height: 1.4;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.4 system-ui, -apple-system, Segoe UI, Arial, sans-serif;
 }
 
-/* ====== TÍTULO Y PÁRRAFOS ====== */
 h1 {
-  font-size: 1.8em;
-  margin-bottom: 8px;
+  margin: 24px auto 6px;
+  max-width: 1000px;
+  padding: 0 16px;
+  font-size: 24px;
 }
 
 .hint {
-  font-size: 0.9em;
-  color: #666;
-  margin-bottom: 20px;
+  margin: 0 auto 16px;
+  max-width: 1000px;
+  padding: 0 16px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
-/* ====== FORMULARIO ====== */
 form {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  margin-bottom: 20px;
+  max-width: 1000px;
+  margin: 0 auto;
+  background: var(--card);
+  border: 1px solid #e8e8ee;
+  border-radius: 14px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  align-items: end;
 }
 
-form div {
-  margin-bottom: 15px;
-}
-
-label {
-  display: block;
-  font-weight: bold;
-  margin-bottom: 4px;
-}
+.field { display: grid; gap: 6px; position: relative; }
+label { font-size: 12px; color: #333; }
 
 input, select, button {
   width: 100%;
-  padding: 8px;
-  font-size: 1em;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 10px 12px;
+  border: 1px solid #d5d7df;
+  border-radius: 10px;
+  font-size: 14px;
+  background: #fff;
+  color: #111;
 }
 
+input:focus, select:focus {
+  outline: 2px solid var(--primary);
+  border-color: var(--primary);
+}
+
+.checkbox { display: flex; gap: 8px; align-items: center; }
+
+.row-full { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; }
+
 button {
-  background-color: #2d89ef;
-  color: white;
+  background: var(--primary);
+  color: #fff;
   border: none;
   cursor: pointer;
 }
-
-button:hover {
-  background-color: #1b5fbd;
+button:hover { background: var(--primary-dark); }
+button.loading { opacity: .8; pointer-events: none; position: relative; }
+button.loading::after {
+  content:""; position:absolute; right:12px; top:50%; width:14px; height:14px;
+  margin-top:-7px; border:2px solid #fff; border-top-color: transparent; border-radius:50%;
+  animation: spin .7s linear infinite;
 }
+@keyframes spin { to{ transform: rotate(360deg) } }
 
-/* ====== CONTROLES Y FILTROS ====== */
 .controls {
+  max-width: 1000px;
+  margin: 12px auto 0;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
-  background: white;
-  padding: 10px;
-  border-radius: 8px;
-  margin-bottom: 15px;
+  gap: 12px;
+  color: #333;
 }
+.controls .left { display: flex; gap: 10px; align-items: center; }
+.muted { color: var(--muted); font-size: 12px; }
 
-.controls label {
-  margin-right: 10px;
-  font-weight: normal;
-}
-
-.muted {
-  color: #666;
-  font-size: 0.9em;
-}
-
-/* ====== TABLA DE RESULTADOS ====== */
 table {
+  max-width: 1000px;
+  margin: 12px auto 24px;
   width: 100%;
   border-collapse: collapse;
-  background: white;
-  border-radius: 8px;
+  background: var(--card);
+  border: 1px solid #e8e8ee;
+  border-radius: 14px;
   overflow: hidden;
 }
+th, td { border-top: 1px solid #eee; padding: 10px; font-size: 14px; text-align: left; vertical-align: top; }
+th { background: #f5f7fb; }
 
-th, td {
-  padding: 10px;
-  border-bottom: 1px solid #ddd;
-  text-align: center;
-}
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color:#444; }
+.details td { background: #fbfbfd; }
 
-th {
-  background: #2d89ef;
-  color: white;
-}
-
-tr:hover {
-  background: #f0f4ff;
-}
-
-/* ====== DETALLES Y BOTONES ====== */
-a.details {
-  color: #2d89ef;
-  text-decoration: none;
-}
-
-a.details:hover {
-  text-decoration: underline;
-}
-/* El contenedor del input debe ser relative para que la lista se posicione contra él */
-.field { display: grid; gap: 6px; position: relative; }
-
-/* La lista del autocompletado debe ocupar el ancho del input y soltar debajo */
+/* Autocompletado — ancho del input */
 .autocomplete {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 6px);
   left: 0;
   width: 100%;
 
-  margin: 6px 0 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 
@@ -141,7 +133,6 @@ a.details:hover {
   z-index: 20;
   font-size: 14px;
 }
-
 .autocomplete li {
   padding: 10px 12px;
   cursor: pointer;
@@ -149,3 +140,16 @@ a.details:hover {
 }
 .autocomplete li:hover { background: #f0f4ff; }
 
+/* Tabla de segmentos en “Ver detalles” */
+.seg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.seg-table th, .seg-table td {
+  border-top: 1px dashed #e6e6ef;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.seg-table th { background: #f9f9fe; text-align: left; }
+.seg-title { margin: 8px 0 2px; font-weight: 600; color:#333; }
