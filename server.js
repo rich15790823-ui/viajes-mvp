@@ -1,4 +1,4 @@
-// server.js — limpio con EJS + /app + API Amadeus (ida/vuelta) + caché
+// server.js — versión estable: estáticos + /api/vuelos (ida/vuelta) + caché simple
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const express = require('express');
@@ -8,35 +8,30 @@ const Amadeus = require('amadeus');
 
 const app = express();
 
-// ---------- Config básica ----------
+// ----------------- Config básica -----------------
 app.use(cors());
 app.use(express.json());
+// Sirve /public como sitio web
 app.use(express.static(path.join(__dirname, 'public')));
 
-// View engine EJS (para /app)
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-
-// ---------- Rutas de páginas ----------
-app.get('/', (_req, res) => res.redirect('/app')); // raíz → /app
-app.get('/app', (_req, res) => res.render('index')); // renderiza views/index.ejs
+// Health
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
-// ---------- Amadeus (sandbox) ----------
+// ----------------- Amadeus (TEST) -----------------
 const AMADEUS_ID = (process.env.AMADEUS_CLIENT_ID || '').trim();
 const AMADEUS_SECRET = (process.env.AMADEUS_CLIENT_SECRET || '').trim();
 
 if (!AMADEUS_ID || !AMADEUS_SECRET) {
-  console.warn('⚠️ Falta AMADEUS_CLIENT_ID o AMADEUS_CLIENT_SECRET en .env (el API fallará).');
+  console.warn('⚠️ Falta AMADEUS_CLIENT_ID o AMADEUS_CLIENT_SECRET en .env — /api fallará.');
 }
 
 const amadeus = new Amadeus({
   clientId: AMADEUS_ID,
   clientSecret: AMADEUS_SECRET,
-  hostname: 'test'
+  hostname: 'test' // sandbox
 });
 
-// ---------- Utilidades ----------
+// ----------------- Utilidades -----------------
 function withTimeout(promise, ms = 15000) {
   return Promise.race([
     promise,
@@ -44,12 +39,12 @@ function withTimeout(promise, ms = 15000) {
   ]);
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5min
+// Caché 5 min
+const CACHE_TTL_MS = 5 * 60 * 1000;
 const cache = new Map(); // key -> { ts, data }
 
-// ---------- API real: /api/vuelos ----------
+// ----------------- API real: /api/vuelos -----------------
 app.get('/api/vuelos', async (req, res) => {
-  console.log('➡️  /api/vuelos', req.query);
   try {
     const origin = (req.query.origin || '').toUpperCase().trim();
     const destination = (req.query.destination || '').toUpperCase().trim();
@@ -72,12 +67,10 @@ app.get('/api/vuelos', async (req, res) => {
     const cacheKey = JSON.stringify({ origin, destination, date, adults, currency, returnDate });
     const cached = cache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
-      console.log('🟢 Cache HIT');
       return res.json(cached.data);
     }
-    console.log('🟠 Cache MISS');
 
-    // Llamada Amadeus
+    // Llamada a Amadeus
     const params = {
       originLocationCode: origin,
       destinationLocationCode: destination,
@@ -88,19 +81,17 @@ app.get('/api/vuelos', async (req, res) => {
     };
     if (returnDate) params.returnDate = returnDate;
 
-    console.log('🟡 Amadeus request:', params);
     const response = await withTimeout(
       amadeus.shopping.flightOffersSearch.get(params),
       15000
     );
-    console.log('🟢 Amadeus OK');
 
     const dict = response.result?.dictionaries || {};
     const carriers = dict.carriers || {};
 
     const data = (response.data || []).map((offer) => {
       const it0 = offer.itineraries?.[0];
-      const it1 = offer.itineraries?.[1]; // puede no existir si es solo ida
+      const it1 = offer.itineraries?.[1]; // puede no existir (solo ida)
 
       const seg0 = it0?.segments || [];
       const seg1 = it1?.segments || [];
@@ -109,15 +100,13 @@ app.get('/api/vuelos', async (req, res) => {
       const first0 = seg0[0];
       const last0  = seg0[seg0.length - 1];
 
-      // Vuelta (si aplica)
+      // Vuelta
       const first1 = seg1[0];
       const last1  = seg1[seg1.length - 1];
 
-      // Aerolínea principal (de la ida, primer tramo)
       const airlineCode = first0?.carrierCode || '';
       const airlineName = carriers[airlineCode] || airlineCode;
 
-      // legs detallados
       const legsOut = seg0.map(s => ({
         airlineCode: s.carrierCode || '',
         flightNumber: s.number || '',
@@ -175,9 +164,10 @@ app.get('/api/vuelos', async (req, res) => {
   }
 });
 
-// ---------- Arranque ----------
+// ----------------- Arranque -----------------
 const PORT = process.env.PORT || 3000;
+// 0.0.0.0 para Render
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Servidor en 0.0.0.0:${PORT} (Render)`);
+  console.log(`✅ Servidor en 0.0.0.0:${PORT}`);
 });
 

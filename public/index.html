@@ -2,89 +2,71 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Navuara · Vuelos</title>
+  <title>Navuara · Vuelos MVP</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/style.css?v=flysky-cards" />
+  <link rel="stylesheet" href="/style.css?v=rollback" />
 </head>
 <body>
-  <header class="hero">
-    <div class="brand">
-      <div class="brand-badge"></div>
-      <div>
-        <h1>Navuara</h1>
-        <p class="subtitle">Busca vuelos con precios claros y resultados en tarjetas.</p>
+  <h1>Buscador de Vuelos (MVP)</h1>
+  <p class="hint">Ejemplo: <b>CUN</b> → <b>MAD</b>, salida <b>2025-09-01</b>, adultos <b>1</b>.</p>
+
+  <form id="form">
+    <div>
+      <label for="origin">Origen (IATA)</label>
+      <input id="origin" name="origin" value="CUN" maxlength="3" autocomplete="off" />
+    </div>
+    <div>
+      <label for="destination">Destino (IATA)</label>
+      <input id="destination" name="destination" value="MAD" maxlength="3" autocomplete="off" />
+    </div>
+    <div>
+      <label for="date">Salida (YYYY-MM-DD)</label>
+      <input id="date" name="date" value="2025-09-01" />
+    </div>
+    <div>
+      <label for="adults">Adultos</label>
+      <input id="adults" name="adults" type="number" min="1" value="1" />
+    </div>
+    <div>
+      <label for="currency">Moneda</label>
+      <select id="currency" name="currency">
+        <option value="USD" selected>USD</option>
+        <option value="MXN">MXN</option>
+        <option value="EUR">EUR</option>
+      </select>
+    </div>
+    <div>
+      <label><input type="checkbox" id="roundTrip" /> Ida y vuelta</label>
+      <div id="returnDateWrap" style="display:none; margin-top:6px;">
+        <label for="returnDate">Regreso (YYYY-MM-DD)</label>
+        <input id="returnDate" name="returnDate" />
       </div>
     </div>
-  </header>
 
-  <section class="container">
-    <div class="search-card">
-      <form id="form">
-        <div class="field origin">
-          <label for="origin">Origen</label>
-          <input id="origin" name="origin" maxlength="50" autocomplete="off" placeholder="Cancún, Madrid..." />
-          <ul id="originList" class="autocomplete"></ul>
-        </div>
-        <div class="field destination">
-          <label for="destination">Destino</label>
-          <input id="destination" name="destination" maxlength="50" autocomplete="off" placeholder="Ciudad o aeropuerto" />
-          <ul id="destinationList" class="autocomplete"></ul>
-        </div>
-        <div class="field date">
-          <label for="date">Salida</label>
-          <input id="date" name="date" type="date" />
-        </div>
-        <div class="field adults">
-          <label for="adults">Adultos</label>
-          <input id="adults" name="adults" type="number" min="1" value="1" />
-        </div>
-        <div class="field currency">
-          <label for="currency">Moneda</label>
-          <select id="currency" name="currency">
-            <option value="USD">USD</option>
-            <option value="MXN">MXN</option>
-            <option value="EUR">EUR</option>
-          </select>
-        </div>
-        <div class="field round">
-          <label class="inline"><input type="checkbox" id="roundTrip" /> Ida y vuelta</label>
-          <div id="returnDateWrap" style="display:none; margin-top:8px;">
-            <label for="returnDate">Regreso</label>
-            <input id="returnDate" name="returnDate" type="date" />
-          </div>
-        </div>
-
-        <div class="row-full">
-          <button id="btn" type="submit">Buscar vuelos</button>
-          <span id="msg" class="muted"></span>
-        </div>
-      </form>
+    <div class="row-full">
+      <button id="btn" type="submit">Buscar</button>
+      <span id="msg" class="muted"></span>
     </div>
+  </form>
 
-    <div id="controls" class="controls" style="display:none;">
-      <div class="left">
-        <label>Ordenar por</label>
-        <select id="sort">
-          <option value="priceAsc">Precio ↑</option>
-          <option value="priceDesc">Precio ↓</option>
-          <option value="durAsc">Duración (ida) ↑</option>
-          <option value="durDesc">Duración (ida) ↓</option>
-          <option value="depAsc">Salida ↑</option>
-          <option value="depDesc">Salida ↓</option>
-        </select>
-        <label class="inline"><input type="checkbox" id="directOnly" /> Solo directos</label>
-        <label>Aerolínea</label>
-        <select id="airline"></select>
-      </div>
-      <div class="right"><span id="sum" class="muted"></span></div>
-    </div>
+  <table id="tabla" style="display:none;">
+    <thead>
+      <tr>
+        <th>Aerolínea</th>
+        <th>Salida (ida)</th>
+        <th>Llegada (ida)</th>
+        <th>Duración (ida)</th>
+        <th>Escalas (ida)</th>
+        <th>Regreso (llegada)</th>
+        <th>Duración (vuelta)</th>
+        <th>Precio</th>
+        <th>Detalles</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
 
-    <!-- Grilla de cards -->
-    <section id="cards" class="cards-grid" style="display:none;"></section>
-
-    <p class="footer-note">Hecho con ❤️ por Navuara</p>
-  </section>
-
-  <script src="/script.js?v=flysky-cards" defer></script>
+  <script src="/script.js?v=rollback" defer></script>
 </body>
 </html>
+
