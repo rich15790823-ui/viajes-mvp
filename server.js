@@ -1,4 +1,4 @@
-// server.js — limpio (estáticos + health + Amadeus + suggest + vuelos + caché)
+// server.js — limpio con EJS + /app + API Amadeus (ida/vuelta) + caché
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const express = require('express');
@@ -8,35 +8,35 @@ const Amadeus = require('amadeus');
 
 const app = express();
 
-/* ----------------- Config básica ----------------- */
+// ---------- Config básica ----------
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// View engine EJS (para /app)
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
+// ---------- Rutas de páginas ----------
+app.get('/', (_req, res) => res.redirect('/app')); // raíz → /app
+app.get('/app', (_req, res) => res.render('index')); // renderiza views/index.ejs
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
-/* ----------------- Amadeus (TEST) ----------------- */
+// ---------- Amadeus (sandbox) ----------
 const AMADEUS_ID = (process.env.AMADEUS_CLIENT_ID || '').trim();
 const AMADEUS_SECRET = (process.env.AMADEUS_CLIENT_SECRET || '').trim();
-console.log('DEBUG AMADEUS_CLIENT_ID len:', AMADEUS_ID.length);
-console.log('DEBUG AMADEUS_CLIENT_SECRET len:', AMADEUS_SECRET.length);
 
-let amadeus = null;
 if (!AMADEUS_ID || !AMADEUS_SECRET) {
-  console.error('❌ Faltan AMADEUS_CLIENT_ID o AMADEUS_CLIENT_SECRET en .env (o en Render). /api/* responderá 503.');
-} else {
-  amadeus = new Amadeus({
-    clientId: AMADEUS_ID,
-    clientSecret: AMADEUS_SECRET,
-    hostname: 'test' // sandbox
-  });
+  console.warn('⚠️ Falta AMADEUS_CLIENT_ID o AMADEUS_CLIENT_SECRET en .env (el API fallará).');
 }
 
-/* ----------------- Utilidades ----------------- */
+const amadeus = new Amadeus({
+  clientId: AMADEUS_ID,
+  clientSecret: AMADEUS_SECRET,
+  hostname: 'test'
+});
+
+// ---------- Utilidades ----------
 function withTimeout(promise, ms = 15000) {
   return Promise.race([
     promise,
@@ -44,98 +44,32 @@ function withTimeout(promise, ms = 15000) {
   ]);
 }
 
-// Caché (memoria)
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5min
 const cache = new Map(); // key -> { ts, data }
 
-/* ----------------- /api/suggest -----------------
-   Autocompletado de ciudades/aeropuertos con Amadeus
-   GET /api/suggest?q=cancun
---------------------------------------------------*/
-app.get('/api/suggest', async (req, res) => {
-  try {
-    if (!amadeus) return res.status(503).json({ error: 'Amadeus no configurado' });
-
-    const q = (req.query.q || '').trim();
-    if (q.length < 2) return res.json([]);
-
-    // cache
-    const cacheKey = `suggest:${q.toLowerCase()}`;
-    const cached = cache.get(cacheKey);
-    if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
-      return res.json(cached.data);
-    }
-
-    const response = await withTimeout(
-      amadeus.referenceData.locations.get({
-        keyword: q,
-        subType: 'AIRPORT,CITY',
-        'page[limit]': 10,
-        view: 'FULL'
-      }),
-      12000
-    );
-
-    const items = (response.data || []).map((it) => ({
-      iataCode: (it.iataCode || '').toUpperCase(),
-      name: it.name || it.detailedName || '',
-      subType: it.subType || '', // CITY o AIRPORT
-      detailed: {
-        cityName: it.address?.cityName || it.address?.cityNameLocalized || '',
-        countryCode: it.address?.countryCode || ''
-      }
-    }));
-
-    const payload = items;
-    cache.set(cacheKey, { ts: Date.now(), data: payload });
-    return res.json(payload);
-  } catch (err) {
-    console.error('🔴 Error /api/suggest:', err?.response?.result || err.message || err);
-    const status = err?.response?.statusCode || (err.message === 'timeout' ? 504 : 500);
-    return res.status(status).json({ error: 'Fallo en suggest' });
-  }
-});
-
-/* ----------------- /api/vuelos -----------------
-   Búsqueda de vuelos (ida opcional / ida y vuelta)
-   GET /api/vuelos?origin=CUN&destination=MAD&date=2025-09-01&adults=1&currency=USD[&returnDate=YYYY-MM-DD]
---------------------------------------------------*/
+// ---------- API real: /api/vuelos ----------
 app.get('/api/vuelos', async (req, res) => {
-  console.log('➡️  /api/vuelos llamada con:', req.query);
+  console.log('➡️  /api/vuelos', req.query);
   try {
-    if (!amadeus) return res.status(503).json({ error: 'Amadeus no configurado' });
-
     const origin = (req.query.origin || '').toUpperCase().trim();
     const destination = (req.query.destination || '').toUpperCase().trim();
     const date = (req.query.date || '').trim();
     const adults = Number(req.query.adults || 1);
     const currency = (req.query.currency || 'USD').toUpperCase().trim();
-    const returnDate = (req.query.returnDate || '').trim(); // opcional
+    const returnDate = (req.query.returnDate || '').trim();
 
     // Validaciones
-    if (!/^[A-Z]{3}$/.test(origin)) {
-      return res.status(400).json({ error: 'Parámetro "origin" inválido. Usa IATA (ej. CUN).' });
-    }
-    if (!/^[A-Z]{3}$/.test(destination)) {
-      return res.status(400).json({ error: 'Parámetro "destination" inválido. Usa IATA (ej. MAD).' });
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return res.status(400).json({ error: 'Parámetro "date" inválido. YYYY-MM-DD' });
-    }
-    if (!Number.isInteger(adults) || adults < 1) {
-      return res.status(400).json({ error: 'Parámetro "adults" inválido. >= 1' });
-    }
+    if (!/^[A-Z]{3}$/.test(origin)) return res.status(400).json({ error: 'Origin inválido (IATA 3 letras).' });
+    if (!/^[A-Z]{3}$/.test(destination)) return res.status(400).json({ error: 'Destination inválido (IATA 3 letras).' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Fecha salida inválida (YYYY-MM-DD).' });
+    if (!Number.isInteger(adults) || adults < 1) return res.status(400).json({ error: 'Adults inválido (>=1).' });
     if (returnDate) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) {
-        return res.status(400).json({ error: 'Parámetro "returnDate" inválido. YYYY-MM-DD' });
-      }
-      if (new Date(returnDate) < new Date(date)) {
-        return res.status(400).json({ error: '"returnDate" no puede ser antes de "date".' });
-      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) return res.status(400).json({ error: 'Fecha regreso inválida (YYYY-MM-DD).' });
+      if (new Date(returnDate) < new Date(date)) return res.status(400).json({ error: 'Regreso no puede ser antes de salida.' });
     }
 
-    // caché
-    const cacheKey = JSON.stringify({ origin, destination, date, returnDate, adults, currency });
+    // Caché
+    const cacheKey = JSON.stringify({ origin, destination, date, adults, currency, returnDate });
     const cached = cache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
       console.log('🟢 Cache HIT');
@@ -143,8 +77,7 @@ app.get('/api/vuelos', async (req, res) => {
     }
     console.log('🟠 Cache MISS');
 
-    // llamada Amadeus
-    console.log('🟡 Llamando a Amadeus...');
+    // Llamada Amadeus
     const params = {
       originLocationCode: origin,
       destinationLocationCode: destination,
@@ -155,33 +88,37 @@ app.get('/api/vuelos', async (req, res) => {
     };
     if (returnDate) params.returnDate = returnDate;
 
+    console.log('🟡 Amadeus request:', params);
     const response = await withTimeout(
       amadeus.shopping.flightOffersSearch.get(params),
       15000
     );
-    console.log('🟢 Amadeus respondió');
+    console.log('🟢 Amadeus OK');
 
     const dict = response.result?.dictionaries || {};
     const carriers = dict.carriers || {};
 
     const data = (response.data || []).map((offer) => {
-      const priceTotal = offer.price?.total || null;
+      const it0 = offer.itineraries?.[0];
+      const it1 = offer.itineraries?.[1]; // puede no existir si es solo ida
 
-      // Itinerarios: 0 = ida, 1 = vuelta (si hay)
-      const out = offer.itineraries?.[0];
-      const ret = offer.itineraries?.[1];
+      const seg0 = it0?.segments || [];
+      const seg1 = it1?.segments || [];
 
-      const outSeg = out?.segments || [];
-      const retSeg = ret?.segments || [];
+      // Ida
+      const first0 = seg0[0];
+      const last0  = seg0[seg0.length - 1];
 
-      const first = outSeg[0];
-      const last = outSeg[outSeg.length - 1];
+      // Vuelta (si aplica)
+      const first1 = seg1[0];
+      const last1  = seg1[seg1.length - 1];
 
-      const airlineCode = first?.carrierCode || '';
+      // Aerolínea principal (de la ida, primer tramo)
+      const airlineCode = first0?.carrierCode || '';
       const airlineName = carriers[airlineCode] || airlineCode;
 
-      // legs ida
-      const legs = outSeg.map((s) => ({
+      // legs detallados
+      const legsOut = seg0.map(s => ({
         airlineCode: s.carrierCode || '',
         flightNumber: s.number || '',
         from: s.departure?.iataCode || null,
@@ -190,9 +127,7 @@ app.get('/api/vuelos', async (req, res) => {
         arriveAt: s.arrival?.at || null,
         duration: s.duration || null
       }));
-
-      // legs vuelta (si existe)
-      const returnLegs = retSeg.map((s) => ({
+      const legsRet = seg1.map(s => ({
         airlineCode: s.carrierCode || '',
         flightNumber: s.number || '',
         from: s.departure?.iataCode || null,
@@ -201,33 +136,31 @@ app.get('/api/vuelos', async (req, res) => {
         arriveAt: s.arrival?.at || null,
         duration: s.duration || null
       }));
-
-      const hasReturn = retSeg.length > 0;
-      const retLast = hasReturn ? retSeg[retSeg.length - 1] : null;
 
       return {
-        priceTotal,
+        priceTotal: offer.price?.total || null,
         currency: offer.price?.currency || currency,
 
         airline: airlineName,
         airlineCode,
 
-        // ida
-        departureAt: first?.departure?.at || null,
-        departureIata: first?.departure?.iataCode || null,
-        arrivalAt: last?.arrival?.at || null,
-        arrivalIata: last?.arrival?.iataCode || null,
-        duration: out?.duration || null,
-        stops: Math.max(0, outSeg.length - 1),
-        legs,
+        // IDA
+        departureAt: first0?.departure?.at || null,
+        departureIata: first0?.departure?.iataCode || null,
+        arrivalAt: last0?.arrival?.at || null,
+        arrivalIata: last0?.arrival?.iataCode || null,
+        durationOut: it0?.duration || null,
+        stops: Math.max(0, seg0.length - 1),
+        legs: legsOut,
 
-        // vuelta
-        hasReturn,
-        returnDuration: ret?.duration || null,
-        returnStops: hasReturn ? Math.max(0, retSeg.length - 1) : null,
-        returnArrivalAt: retLast?.arrival?.at || null,
-        returnArrivalIata: retLast?.arrival?.iataCode || null,
-        returnLegs
+        // VUELTA
+        hasReturn: !!it1,
+        returnDepartureAt: first1?.departure?.at || null,
+        returnDepartureIata: first1?.departure?.iataCode || null,
+        returnArrivalAt: last1?.arrival?.at || null,
+        returnArrivalIata: last1?.arrival?.iataCode || null,
+        durationRet: it1?.duration || null,
+        returnLegs: legsRet
       };
     });
 
@@ -235,53 +168,16 @@ app.get('/api/vuelos', async (req, res) => {
     cache.set(cacheKey, { ts: Date.now(), data: payload });
     return res.json(payload);
   } catch (err) {
-    console.error('🔴 Error en /api/vuelos:', err?.response?.result || err.message || err);
+    console.error('🔴 /api/vuelos error:', err?.response?.result || err.message || err);
     const status = err?.response?.statusCode || (err.message === 'timeout' ? 504 : 500);
     const body = err?.response?.result || { error: err.message || 'Error inesperado' };
     return res.status(status).json(body);
   }
 });
 
-// --- AUTOCOMPLETE: /api/airports (ciudades y aeropuertos) ---
-app.get('/api/airports', async (req, res) => {
-  try {
-    const q = (req.query.q || '').trim();
-    if (!q || q.length < 2) {
-      return res.json({ results: [] });
-    }
-
-    // Llama a Amadeus Locations (CITY + AIRPORT)
-    const r = await amadeus.referenceData.locations.get({
-      keyword: q,
-      subType: 'AIRPORT,CITY',
-      'page[limit]': 10
-    });
-
-    const rows = (r.data || []).map(item => {
-      const iata = item.iataCode || '';
-      const name = item.name || '';
-      // Construimos un label legible, ej: "CUN — Cancún (MX)"
-      const cityName = item.address?.cityName || '';
-      const country = item.address?.countryCode || '';
-      let label = iata ? `${iata} — ${name}` : name;
-      if (cityName && cityName !== name) label += `, ${cityName}`;
-      if (country) label += ` (${country})`;
-      return { iata, label, subType: item.subType || 'AIRPORT' };
-    });
-
-    res.json({ results: rows });
-  } catch (err) {
-    console.error('Error /api/airports:', err?.response?.result || err.message || err);
-    const status = err?.response?.statusCode || 500;
-    const body = err?.response?.result || { error: 'Error buscando aeropuertos/ciudades' };
-    res.status(status).json(body);
-  }
-});
-
-
-/* ----------------- Arranque ----------------- */
+// ---------- Arranque ----------
 const PORT = process.env.PORT || 3000;
-// Importante para Render: 0.0.0.0
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Servidor en http://0.0.0.0:${PORT}`);
+  console.log(`✅ Servidor en 0.0.0.0:${PORT} (Render)`);
 });
+

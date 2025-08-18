@@ -4,6 +4,46 @@
   <meta charset="UTF-8" />
   <title>Navuara · Vuelos MVP</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <h1>Buscador de Vuelos (MVP)</h1>
+  <form id="form">
+    <div><label>Origen</label><input id="origin" value="CUN" /></div>
+    <div><label>Destino</label><input id="destination" value="MAD" /></div>
+    <div><label>Salida</label><input id="date" value="2025-09-01" /></div>
+    <div><label>Adultos</label><input id="adults" value="1" /></div>
+    <div><label>Moneda</label><input id="currency" value="USD" /></div>
+    <div>
+      <label><input type="checkbox" id="roundTrip" /> Ida y vuelta</label>
+      <div id="returnDateWrap" style="display:none;"><label>Regreso</label><input id="returnDate" /></div>
+    </div>
+    <div>
+      <button id="btn" type="submit">Buscar</button>
+      <span id="msg" class="muted"></span>
+    </div>
+  </form>
+
+  <table id="tabla" style="display:none; width:100%; border-collapse:collapse; margin-top:16px;">
+    <thead>
+      <tr>
+        <th>Aerolínea</th><th>Salida (ida)</th><th>Llegada (ida)</th>
+        <th>Duración (ida)</th><th>Escalas (ida)</th><th>Regreso (llegada)</th>
+        <th>Duración (vuelta)</th><th>Precio</th><th>Detalles</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <script src="/script.js?v=ejs-route" defer></script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Navuara · Vuelos MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body { font-family: system-ui, -apple-system, Arial, sans-serif; max-width: 1000px; margin: 24px auto; padding: 0 16px; }
     h1 { margin: 0 0 8px; }
