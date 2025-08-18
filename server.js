@@ -242,6 +242,43 @@ app.get('/api/vuelos', async (req, res) => {
   }
 });
 
+// --- AUTOCOMPLETE: /api/airports (ciudades y aeropuertos) ---
+app.get('/api/airports', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q || q.length < 2) {
+      return res.json({ results: [] });
+    }
+
+    // Llama a Amadeus Locations (CITY + AIRPORT)
+    const r = await amadeus.referenceData.locations.get({
+      keyword: q,
+      subType: 'AIRPORT,CITY',
+      'page[limit]': 10
+    });
+
+    const rows = (r.data || []).map(item => {
+      const iata = item.iataCode || '';
+      const name = item.name || '';
+      // Construimos un label legible, ej: "CUN — Cancún (MX)"
+      const cityName = item.address?.cityName || '';
+      const country = item.address?.countryCode || '';
+      let label = iata ? `${iata} — ${name}` : name;
+      if (cityName && cityName !== name) label += `, ${cityName}`;
+      if (country) label += ` (${country})`;
+      return { iata, label, subType: item.subType || 'AIRPORT' };
+    });
+
+    res.json({ results: rows });
+  } catch (err) {
+    console.error('Error /api/airports:', err?.response?.result || err.message || err);
+    const status = err?.response?.statusCode || 500;
+    const body = err?.response?.result || { error: 'Error buscando aeropuertos/ciudades' };
+    res.status(status).json(body);
+  }
+});
+
+
 /* ----------------- Arranque ----------------- */
 const PORT = process.env.PORT || 3000;
 // Importante para Render: 0.0.0.0

@@ -1,253 +1,309 @@
-// Placeholder por JS (sin tocar HTML)
-document.addEventListener('DOMContentLoaded', () => {
-  const origin = document.getElementById('origin');
-  const destination = document.getElementById('destination');
-  if (origin) origin.setAttribute('placeholder', 'Ciudad o Aeropuerto');
-  if (destination) destination.setAttribute('placeholder', 'Ciudad o Aeropuerto');
-  console.log('✅ Placeholders aplicados por JS');
-});
+// script.js — Autocompletado sin tocar HTML (crea listas y maneja selección)
+console.log('script.js Autocomplete ✅');
 
-console.log("script.js Flysky Cards ✅");
-
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => document.querySelectorAll(s);
-
-const form = $('#form');
-const btn  = $('#btn');
-const msg  = $('#msg');
-const cards = $('#cards');
-const controls = $('#controls');
-const sortSel = $('#sort');
-const airlineSel = $('#airline');
-const directOnly = $('#directOnly');
-const sum = $('#sum');
-const roundTripCheckbox = $('#roundTrip');
-const returnDateWrap = $('#returnDateWrap');
-
-roundTripCheckbox?.addEventListener('change', () => {
-  returnDateWrap.style.display = roundTripCheckbox.checked ? 'block' : 'none';
-});
-
-function fmt(iso){ if(!iso) return '-'; const d=new Date(iso); return d.toLocaleString(); }
-function pad(n){ return n<10? '0'+n: String(n); }
-function parseISODur(iso){ // PT7H55M → {h:7,m:55}
-  if(!iso) return {h:0,m:0};
-  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/i);
-  const h = m && m[1] ? +m[1] : 0;
-  const mi = m && m[2] ? +m[2] : 0;
-  return {h, m:mi};
-}
-function durText(iso){ const {h,m}=parseISODur(iso); return `${h} h ${pad(m)} m`; }
-
-let lastResults = []; // se guardan para filtros/orden
-
-function buildAirlineOptions(list){
-  const set = new Set(list.map(r => r.airline).filter(Boolean));
-  airlineSel.innerHTML = `<option value="">Todas</option>` + [...set].sort().map(n=>`<option>${n}</option>`).join('');
-}
-
-function applyFiltersAndSort(){
-  let arr = [...lastResults];
-
-  // filtros
-  if (directOnly.checked) arr = arr.filter(r => (r.stops||0) === 0);
-  const selAir = airlineSel.value;
-  if (selAir) arr = arr.filter(r => r.airline === selAir);
-
-  // ordenar
-  switch (sortSel.value){
-    case 'priceAsc':  arr.sort((a,b)=> (+a.priceTotal||1e9) - (+b.priceTotal||1e9)); break;
-    case 'priceDesc': arr.sort((a,b)=> (+b.priceTotal||0) - (+a.priceTotal||0)); break;
-    case 'durAsc':    arr.sort((a,b)=> durMinutes(a.durationOut) - durMinutes(b.durationOut)); break;
-    case 'durDesc':   arr.sort((a,b)=> durMinutes(b.durationOut) - durMinutes(a.durationOut)); break;
-    case 'depAsc':    arr.sort((a,b)=> new Date(a.departureAt) - new Date(b.departureAt)); break;
-    case 'depDesc':   arr.sort((a,b)=> new Date(b.departureAt) - new Date(a.departureAt)); break;
+(function () {
+  // Utilidad: debounce para no saturar la API
+  function debounce(fn, ms = 250) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    };
   }
 
-  renderCards(arr);
-  sum.textContent = `${arr.length} resultado(s)`;
-}
-
-function durMinutes(iso){ const {h,m}=parseISODur(iso); return h*60+m; }
-
-function renderCards(list){
-  if (!list || list.length===0){ cards.style.display='none'; cards.innerHTML=''; return; }
-  cards.style.display = 'grid';
-  cards.innerHTML = list.map((r,idx)=>{
-    const price = r.priceTotal ? `${r.currency||'USD'} ${Number(r.priceTotal).toLocaleString()}` : '-';
-    const outDur  = r.durationOut ? durText(r.durationOut) : '-';
-    const retDur  = r.durationRet ? durText(r.durationRet) : '—';
-    const regreso = r.hasReturn
-      ? `<div class="row"><strong>Vuelta:</strong> <span class="mono">${r.returnArrivalIata||'-'} · ${fmt(r.returnArrivalAt)}</span></div>`
-      : `<div class="row"><strong>Vuelta:</strong> <span class="mono">—</span></div>`;
-
-    // legs ida
-    const legsOut = (r.legs||[]).map((s,i)=>`
-      <tr>
-        <td>IDA ${i+1}</td>
-        <td class="mono">${s.airlineCode} ${s.flightNumber||''}</td>
-        <td class="mono">${s.from} → ${s.to}</td>
-        <td class="mono">${fmt(s.departAt)} → ${fmt(s.arriveAt)}</td>
-        <td>${durText(s.duration||'')}</td>
-      </tr>
-    `).join('');
-
-    // legs vuelta
-    const legsRet = (r.returnLegs||[]).map((s,i)=>`
-      <tr>
-        <td>VUELTA ${i+1}</td>
-        <td class="mono">${s.airlineCode} ${s.flightNumber||''}</td>
-        <td class="mono">${s.from} → ${s.to}</td>
-        <td class="mono">${fmt(s.departAt)} → ${fmt(s.arriveAt)}</td>
-        <td>${durText(s.duration||'')}</td>
-      </tr>
-    `).join('');
-
-    return `
-    <article class="card">
-      <div class="card-header">
-        <div class="card-title">${r.airline || '-' } <span class="mono">(${r.airlineCode||''})</span></div>
-        <div class="price">${price}</div>
-      </div>
-      <div class="card-body">
-        <div class="block">
-          <h4>Itinerario</h4>
-          <div class="row"><strong>Salida:</strong> <span class="mono">${r.departureIata||'-'} · ${fmt(r.departureAt)}</span></div>
-          <div class="row"><strong>Llegada:</strong> <span class="mono">${r.arrivalIata||'-'} · ${fmt(r.arrivalAt)}</span></div>
-          ${regreso}
-          <div class="kpi">
-            <div class="kpi-item">Duración ida<br><b>${outDur}</b></div>
-            <div class="kpi-item">Duración vuelta<br><b>${retDur}</b></div>
-            <div class="kpi-item">Escalas ida<br><b>${r.stops ?? '-'}</b></div>
-          </div>
-        </div>
-        <div class="block">
-          <h4>Resumen</h4>
-          <div>Mejor relación <span class="badge">Precio/tiempo</span></div>
-          <div class="muted" style="margin-top:6px">Precios en ${r.currency||'USD'} — datos demostrativos</div>
-        </div>
-      </div>
-      <div class="card-footer">
-        <button class="btn-detalles" data-idx="${idx}">Ver detalles</button>
-        <span class="muted">${r.legs?.length || 0} tramo(s) ida ${r.hasReturn ? `· ${r.returnLegs?.length||0} vuelta` : ''}</span>
-      </div>
-      <div id="det-${idx}" class="details">
-        <div class="block" style="margin:12px">
-          <h4>Detalle de tramos</h4>
-          <table class="seg-table">
-            <thead><tr><th>Trayecto</th><th>Vuelo</th><th>Ruta</th><th>Horario</th><th>Duración</th></tr></thead>
-            <tbody>
-              ${legsOut || `<tr><td colspan="5">Sin detalle de ida.</td></tr>`}
-              ${r.hasReturn ? (legsRet || `<tr><td colspan="5">Sin detalle de vuelta.</td></tr>`) : ``}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </article>`;
-  }).join('');
-
-  // toggle detalles (delegado)
-  cards.addEventListener('click', (ev)=>{
-    const btn = ev.target.closest('.btn-detalles');
-    if(!btn) return;
-    const i = btn.getAttribute('data-idx');
-    const panel = document.getElementById(`det-${i}`);
-    const isOpen = panel.classList.contains('open');
-    panel.classList.toggle('open', !isOpen);
-    btn.textContent = isOpen ? 'Ver detalles' : 'Ocultar';
-  }, { once:true });
-}
-
-function end(){ btn.disabled=false; btn.classList.remove('loading'); btn.textContent='Buscar vuelos'; }
-
-form.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  msg.className='muted'; msg.textContent='Buscando...';
-  btn.disabled=true; btn.classList.add('loading'); btn.textContent='Buscando…';
-  cards.style.display='none'; cards.innerHTML='';
-
-  const origin = $('#origin').dataset.code || $('#origin').value.trim().toUpperCase();
-  const destination = $('#destination').dataset.code || $('#destination').value.trim().toUpperCase();
-  const date = $('#date').value.trim();
-  const adults = ($('#adults').value || '1').trim();
-  const currency = $('#currency').value;
-  const returnDate = roundTripCheckbox.checked ? ($('#returnDate').value || '').trim() : '';
-
-  // validaciones
-  if (!origin){ msg.className='error'; msg.textContent='Origen inválido.'; return end(); }
-  if (!destination){ msg.className='error'; msg.textContent='Destino inválido.'; return end(); }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)){ msg.className='error'; msg.textContent='Fecha de salida inválida.'; return end(); }
-  if (roundTripCheckbox.checked && !/^\d{4}-\d{2}-\d{2}$/.test(returnDate)){ msg.className='error'; msg.textContent='Fecha de regreso inválida.'; return end(); }
-
-  try{
-    const q = new URLSearchParams({ origin, destination, date, adults, currency });
-    if (returnDate) q.set('returnDate', returnDate);
-    const res = await fetch('/api/vuelos?' + q.toString());
-    const data = await res.json();
-    if (!res.ok){
-      msg.className='error';
-      msg.textContent = res.status===504 ? 'Timeout. Intenta otra fecha.' : (data?.error || 'Error en la búsqueda.');
-      return;
-    }
-    // Adaptamos resultados para cards: separar duración ida/vuelta
-    lastResults = (data.results||[]).map(r=>{
-      // en server mandamos duration (ida) y returnDuration (vuelta) — si no, calcula desde itineraries
-      const out = r.duration || r.durationOut;
-      const ret = r.returnDuration || r.durationRet;
-      return {...r, durationOut: out, durationRet: ret};
-    });
-
-    if (lastResults.length===0){
-      msg.className='ok'; msg.textContent='Sin resultados. Prueba otras fechas o rutas.';
-      cards.style.display='none'; return;
-    }
-    buildAirlineOptions(lastResults);
-    controls.style.display='flex';
-    applyFiltersAndSort();
-
-    msg.className='ok'; msg.textContent=`Listo: ${lastResults.length} resultado(s).`;
-  } catch(err){
-    console.error(err);
-    msg.className='error'; msg.textContent='Error de red o servidor.';
-  } finally {
-    end();
+  // Crea un <ul> flotante para sugerencias
+  function buildList() {
+    const ul = document.createElement('ul');
+    ul.className = 'autocomplete';
+    ul.style.position = 'absolute';
+    ul.style.zIndex = '1000';
+    ul.style.listStyle = 'none';
+    ul.style.margin = '0';
+    ul.style.padding = '0';
+    ul.style.border = '1px solid #ccc';
+    ul.style.background = '#fff';
+    ul.style.maxHeight = '200px';
+    ul.style.overflowY = 'auto';
+    ul.style.display = 'none';
+    document.body.appendChild(ul);
+    return ul;
   }
-});
 
-/* ===== Autocomplete mínimo con /api/airports?q= ===== */
-function attachAutocomplete(input, listEl){
-  let t;
-  input.addEventListener('input', ()=>{
-    clearTimeout(t);
-    const q = input.value.trim();
-    input.dataset.code = '';
-    if (q.length < 2){ listEl.style.display='none'; listEl.innerHTML=''; return; }
-    t = setTimeout(async ()=>{
-      try{
+  // Posiciona el <ul> debajo del input
+  function placeList(ul, input) {
+    const rect = input.getBoundingClientRect();
+    ul.style.left = window.scrollX + rect.left + 'px';
+    ul.style.top = window.scrollY + rect.bottom + 'px';
+    ul.style.width = rect.width + 'px';
+  }
+
+  // Aplica autocompletado a un input por id
+  function setupAutocomplete(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    // dataset.iata guardará el código elegido
+    input.dataset.iata = '';
+
+    const list = buildList();
+
+    const closeList = () => {
+      list.style.display = 'none';
+      list.innerHTML = '';
+    };
+
+    const openList = () => {
+      placeList(list, input);
+      list.style.display = 'block';
+    };
+
+    // Renderiza opciones
+    function renderOptions(items) {
+      list.innerHTML = '';
+      if (!items || items.length === 0) {
+        closeList();
+        return;
+      }
+      items.forEach((it) => {
+        const li = document.createElement('li');
+        li.textContent = it.label || it.iata || '';
+        li.style.padding = '8px 10px';
+        li.style.cursor = 'pointer';
+        li.addEventListener('mouseenter', () => { li.style.background = '#eee'; });
+        li.addEventListener('mouseleave', () => { li.style.background = '#fff'; });
+        li.addEventListener('click', () => {
+          input.value = it.label || it.iata || '';
+          input.dataset.iata = it.iata || '';
+          closeList();
+        });
+        list.appendChild(li);
+      });
+      openList();
+    }
+
+    // Llama a /api/airports con debounce
+    const search = debounce(async () => {
+      const q = input.value.trim();
+      input.dataset.iata = ''; // si se cambia el texto, anulamos selección previa
+      if (q.length < 2) {
+        closeList();
+        return;
+      }
+      try {
         const res = await fetch('/api/airports?q=' + encodeURIComponent(q));
-        const items = await res.json(); // espera [{code:'CUN', city:'Cancún', name:'Intl', country:'MX'}]
-        listEl.innerHTML = items.slice(0,8).map(i=>`
-          <li data-code="${i.code}">
-            <span class="autocode">${i.code}</span>
-            <span class="autocity">${i.city || i.name || ''}</span>
-          </li>`).join('');
-        listEl.style.display = items.length ? 'block' : 'none';
-      }catch(e){ console.error(e); listEl.style.display='none'; }
-    }, 180);
-  });
-  listEl.addEventListener('click', (ev)=>{
-    const li = ev.target.closest('li'); if(!li) return;
-    input.value = li.querySelector('.autocity')?.textContent || li.dataset.code;
-    input.dataset.code = li.dataset.code;
-    listEl.style.display='none'; listEl.innerHTML='';
-  });
-  document.addEventListener('click', (e)=>{ if(!listEl.contains(e.target) && e.target!==input){ listEl.style.display='none'; }});
-}
-attachAutocomplete($('#origin'), $('#originList'));
-attachAutocomplete($('#destination'), $('#destinationList'));
+        const data = await res.json();
+        renderOptions(data.results || []);
+      } catch (e) {
+        console.error(e);
+        closeList();
+      }
+    }, 300);
 
-// fecha por defecto (hoy + 20 días)
-(function setDefaultDate(){
-  const d=new Date(); d.setDate(d.getDate()+20);
-  $('#date').value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    // Eventos
+    input.addEventListener('input', search);
+    input.addEventListener('focus', () => {
+      if (list.children.length > 0) openList();
+    });
+    input.addEventListener('blur', () => {
+      // Cierra un poco después para permitir click en items
+      setTimeout(closeList, 150);
+    });
+    window.addEventListener('resize', () => {
+      if (list.style.display === 'block') placeList(list, input);
+    });
+    window.addEventListener('scroll', () => {
+      if (list.style.display === 'block') placeList(list, input);
+    });
+  }
+
+  // Utilidades ya existentes (formato)
+  function fmt(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return d.toLocaleString();
+  }
+  function num(n) {
+    return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function end(btn) {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.textContent = 'Buscar';
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // Placeholders (sin tocar HTML)
+    const origin = document.getElementById('origin');
+    const destination = document.getElementById('destination');
+    if (origin) origin.setAttribute('placeholder', 'Ciudad o Aeropuerto');
+    if (destination) destination.setAttribute('placeholder', 'Ciudad o Aeropuerto');
+
+    // Autocomplete para ambos campos
+    setupAutocomplete('origin');
+    setupAutocomplete('destination');
+
+    // Mostrar/ocultar regreso
+    const roundTripCheckbox = document.getElementById('roundTrip');
+    const returnDateWrap = document.getElementById('returnDateWrap');
+    if (roundTripCheckbox && returnDateWrap) {
+      roundTripCheckbox.addEventListener('change', () => {
+        returnDateWrap.style.display = roundTripCheckbox.checked ? 'block' : 'none';
+      });
+    }
+
+    // Submit del formulario
+    const form = document.getElementById('form');
+    const btn = document.getElementById('btn');
+    const msg = document.getElementById('msg');
+    const tabla = document.getElementById('tabla');
+    const tbody = document.getElementById('tbody');
+
+    if (!form) return;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!btn || !msg || !tabla || !tbody) return;
+
+      msg.className = 'muted';
+      msg.textContent = 'Buscando...';
+      btn.disabled = true;
+      btn.classList.add('loading');
+      btn.textContent = 'Buscando…';
+      tabla.style.display = 'none';
+      tbody.innerHTML = '';
+
+      const adultsEl = document.getElementById('adults');
+      const currencyEl = document.getElementById('currency');
+      const dateEl = document.getElementById('date');
+      const returnDateEl = document.getElementById('returnDate');
+
+      // **IMPORTANTE**: si el usuario eligió de la lista, usamos IATA
+      // si no, intentamos tomar las primeras 3 letras "limpias"
+      let originIata = (origin?.dataset?.iata || '').trim();
+      let destIata   = (destination?.dataset?.iata || '').trim();
+
+      if (!originIata && origin?.value) {
+        originIata = origin.value.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 3);
+      }
+      if (!destIata && destination?.value) {
+        destIata = destination.value.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 3);
+      }
+
+      const date = dateEl?.value?.trim() || '';
+      const adults = (adultsEl?.value || '1').trim();
+      const currency = currencyEl?.value || 'USD';
+      const isRound = !!roundTripCheckbox?.checked;
+      const returnDate = isRound ? (returnDateEl?.value?.trim() || '') : '';
+
+      // Validaciones básicas
+      if (!/^[A-Z]{3}$/.test(originIata)) {
+        msg.className='error'; msg.textContent='Origen inválido. Elige de la lista o escribe una ciudad/aeropuerto.'; end(btn); return;
+      }
+      if (!/^[A-Z]{3}$/.test(destIata)) {
+        msg.className='error'; msg.textContent='Destino inválido. Elige de la lista o escribe una ciudad/aeropuerto.'; end(btn); return;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        msg.className='error'; msg.textContent='Salida inválida (YYYY-MM-DD).'; end(btn); return;
+      }
+      if (isRound && !/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) {
+        msg.className='error'; msg.textContent='Regreso inválido (YYYY-MM-DD).'; end(btn); return;
+      }
+
+      try {
+        const q = new URLSearchParams({
+          origin: originIata,
+          destination: destIata,
+          date, adults, currency
+        });
+        if (returnDate) q.set('returnDate', returnDate);
+
+        const res = await fetch('/api/vuelos?' + q.toString());
+        const data = await res.json();
+
+        if (!res.ok) {
+          msg.className = 'error';
+          msg.textContent = data?.error || 'Error en la búsqueda.';
+          end(btn);
+          return;
+        }
+
+        const resultados = data.results || [];
+        if (resultados.length === 0) {
+          msg.className = 'ok';
+          msg.textContent = 'Sin resultados. Prueba otras fechas o rutas.';
+          end(btn);
+          return;
+        }
+
+        // Pintar filas (si tu servidor ya devuelve durOut/durRet, úsalo;
+        // si no, usa el campo duration general del itinerario de ida)
+        resultados.forEach((r, idx) => {
+          const price = r.priceTotal ? `${r.currency || 'USD'} ${num(r.priceTotal)}` : '-';
+
+          // Compatibilidad: si tu server no envía durOut/durRet aún
+          const durOut = r.durOut || r.duration || '-';
+          const durRet = r.durRet || (r.hasReturn ? (r.returnDuration || '-') : '—');
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${r.airline || '-'}<br><span class="mono">${r.airlineCode || ''}</span></td>
+            <td><b>${r.departureIata || '-'}</b><br><span class="mono">${fmt(r.departureAt)}</span></td>
+            <td><b>${r.arrivalIata || '-'}</b><br><span class="mono">${fmt(r.arrivalAt)}</span></td>
+            <td>${durOut}</td>
+            <td>${r.stops ?? '-'}</td>
+            <td>${r.hasReturn ? `<b>${r.returnArrivalIata || '-'}</b><br><span class="mono">${fmt(r.returnArrivalAt)}</span>` : '—'}</td>
+            <td>${durRet}</td>
+            <td>${price}</td>
+            <td><button type="button" data-idx="${idx}" class="btn-detalles">Ver detalles</button></td>
+          `;
+          tbody.appendChild(tr);
+
+          // Detalles
+          const trDet = document.createElement('tr');
+          trDet.className = 'details';
+          const legsOutText = (r.legs || []).map((s, i) =>
+            `IDA ${i+1} — ${s.airlineCode} ${s.flightNumber}\n  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}\n  Duración: ${s.duration || '-'}`
+          ).join('\n\n');
+
+          const legsRetText = (r.returnLegs || []).map((s, i) =>
+            `VUELTA ${i+1} — ${s.airlineCode} ${s.flightNumber}\n  ${s.from}  ${fmt(s.departAt)}  →  ${s.to}  ${fmt(s.arriveAt)}\n  Duración: ${s.duration || '-'}`
+          ).join('\n\n');
+
+          const content = [
+            legsOutText ? legsOutText : 'Sin detalle de ida.',
+            r.hasReturn ? (legsRetText || 'Sin detalle de vuelta.') : ''
+          ].filter(Boolean).join('\n\n');
+
+          trDet.innerHTML = `
+            <td colspan="9">
+              <div style="display:none" id="det-${idx}">
+                <pre>${content}</pre>
+              </div>
+            </td>`;
+          tbody.appendChild(trDet);
+        });
+
+        // Toggle detalles (delegado)
+        tbody.addEventListener('click', (ev) => {
+          const b = ev.target.closest('.btn-detalles');
+          if (!b) return;
+          const i = b.getAttribute('data-idx');
+          const panel = document.getElementById(`det-${i}`);
+          const visible = panel.style.display !== 'none';
+          panel.style.display = visible ? 'none' : 'block';
+          b.textContent = visible ? 'Ver detalles' : 'Ocultar';
+        }, { once: true });
+
+        msg.className = 'ok';
+        msg.textContent = `Listo: ${resultados.length} resultado(s).`;
+        tabla.style.display = '';
+      } catch (e) {
+        console.error(e);
+        msg.className = 'error';
+        msg.textContent = 'Error de red o servidor.';
+      } finally {
+        end(btn);
+      }
+    });
+  });
 })();
