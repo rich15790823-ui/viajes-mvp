@@ -1,43 +1,21 @@
-k<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
   <title>Navuara · Vuelos MVP</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: system-ui, -apple-system, Arial, sans-serif; max-width: 900px; margin: 24px auto; padding: 0 16px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-    th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
-    .muted { color:#666 }
-  </style>
 </head>
 <body>
   <h1>Buscador de Vuelos (MVP)</h1>
 
   <form id="form">
-    <div>
-      <label for="origin">Origen (IATA)</label>
-      <input id="origin" value="CUN" maxlength="3" />
-    </div>
-    <div>
-      <label for="destination">Destino (IATA)</label>
-      <input id="destination" value="MAD" maxlength="3" />
-    </div>
-    <div>
-      <label for="date">Salida (YYYY-MM-DD)</label>
-      <input id="date" value="2025-09-01" />
-    </div>
-    <div>
-      <label for="adults">Adultos</label>
-      <input id="adults" type="number" min="1" value="1" />
-    </div>
+    <div><label for="origin">Origen (IATA)</label><input id="origin" value="CUN" maxlength="3" /></div>
+    <div><label for="destination">Destino (IATA)</label><input id="destination" value="MAD" maxlength="3" /></div>
+    <div><label for="date">Salida (YYYY-MM-DD)</label><input id="date" value="2025-09-01" /></div>
+    <div><label for="adults">Adultos</label><input id="adults" type="number" min="1" value="1" /></div>
     <div>
       <label for="currency">Moneda</label>
-      <select id="currency">
-        <option value="USD" selected>USD</option>
-        <option value="MXN">MXN</option>
-        <option value="EUR">EUR</option>
-      </select>
+      <select id="currency"><option>USD</option><option>MXN</option><option>EUR</option></select>
     </div>
     <div>
       <label><input type="checkbox" id="roundTrip" /> Ida y vuelta</label>
@@ -46,27 +24,19 @@ k<!DOCTYPE html>
         <input id="returnDate" value="2025-09-10" />
       </div>
     </div>
-
-    <div style="margin-top:10px;">
-      <button id="btn" type="submit">Buscar</button>
-      <span id="msg" class="muted"></span>
-    </div>
+    <button id="btn" type="submit">Buscar</button>
+    <span id="msg" class="muted"></span>
   </form>
 
-  <table id="tabla" style="display:none;">
+  <table id="tabla" style="display:none; width:100%; border-collapse:collapse; margin-top:16px;">
     <thead>
       <tr>
-        <th>Aerolínea</th>
-        <th>Salida</th>
-        <th>Llegada</th>
-        <th>Precio</th>
-        <th>Regreso</th>
+        <th>Aerolínea</th><th>Salida</th><th>Llegada</th><th>Precio</th><th>Regreso</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
   </table>
 
-  <!-- MUY IMPORTANTE: cache bust para evitar versiones viejas -->
   <script src="/script.js?v=wire-1" defer></script>
 </body>
 </html>
