@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Navuara · Vuelos MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Arial, sans-serif; max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+    h1 { margin: 0 0 8px; }
+    .hint { color: #666; font-size: 12px; margin-bottom: 16px; }
+    form { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; align-items: end; }
+    label { display: block; font-size: 12px; margin-bottom: 6px; }
+    input, select, button { padding: 10px; font-size: 14px; width: 100%; box-sizing: border-box; }
+    input, select { border: 1px solid #ccc; border-radius: 8px; }
+    button { cursor: pointer; border: 0; border-radius: 8px; background:#111; color:#fff; }
+    .row-full { grid-column: 1 / -1; }
+    #msg { margin-left: 12px; font-size: 14px; }
+    .error { color: #b00020; }
+    .ok { color: #117a00; }
+    .muted { color: #666; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; text-align: left; vertical-align: top; }
+    th { background: #f5f5f5; }
+    .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+    .details td { background: #fafafa; }
+    /* Autocomplete opcional */
+    ul.autocomplete { position:absolute; z-index:9999; list-style:none; margin:0; padding:0; border:1px solid #ccc; background:#fff; max-height:200px; overflow-y:auto; display:none; }
+    ul.autocomplete li { padding:8px 10px; cursor:pointer; }
+    ul.autocomplete li:hover { background:#eee; }
+    .ac-wrap { position:relative; }
+    .ac-wrap ul.autocomplete { width:100%; left:0; top:100%; }
+  </style>
+</head>
+<body>
+  <h1>Buscador de Vuelos (MVP)</h1>
+  <p class="hint">Escribe **códigos IATA** por ahora (ej. CUN → MAD). Luego reactivamos autocompletado.</p>
+
+  <form id="form">
+    <div class="ac-wrap">
+      <label for="origin">Origen</label>
+      <input id="origin" name="origin" maxlength="50" autocomplete="off" placeholder="IATA (p. ej. CUN)" />
+      <ul id="originList" class="autocomplete"></ul>
+    </div>
+    <div class="ac-wrap">
+      <label for="destination">Destino</label>
+      <input id="destination" name="destination" maxlength="50" autocomplete="off" placeholder="IATA (p. ej. MAD)" />
+      <ul id="destinationList" class="autocomplete"></ul>
+    </div>
+    <div>
+      <label for="date">Salida</label>
+      <input id="date" name="date" type="date" />
+    </div>
+    <div>
+      <label for="adults">Adultos</label>
+      <input id="adults" name="adults" type="number" min="1" value="1" />
+    </div>
+    <div>
+      <label for="currency">Moneda</label>
+      <select id="currency" name="currency">
+        <option value="USD" selected>USD</option>
+        <option value="MXN">MXN</option>
+        <option value="EUR">EUR</option>
+      </select>
+    </div>
+    <div>
+      <label><input type="checkbox" id="roundTrip" /> Ida y vuelta</label>
+      <div id="returnDateWrap" style="display:none; margin-top:6px;">
+        <label for="returnDate">Regreso</label>
+        <input id="returnDate" name="returnDate" type="date" />
+      </div>
+    </div>
+
+    <div class="row-full">
+      <button id="btn" type="submit">Buscar</button>
+      <span id="msg" class="muted"></span>
+    </div>
+  </form>
+
+  <!-- Tabla que tu JS necesita -->
+  <table id="tabla" style="display:none;">
+    <thead>
+      <tr>
+        <th>Aerolínea</th>
+        <th>Salida (ida)</th>
+        <th>Llegada (ida)</th>
+        <th>Duración (ida)</th>
+        <th>Escalas (ida)</th>
+        <th>Regreso (llegada)</th>
+        <th>Duración (vuelta)</th>
+        <th>Precio</th>
+        <th>Detalles</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <!-- fuerzo recarga de JS -->
+  <script src="/script.js?v=hotfix-3" defer></script>
+</body>
+</html>
+
