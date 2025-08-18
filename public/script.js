@@ -322,3 +322,36 @@ function renderResults() {
 
   if (sum) sum.textContent = `Mostrando ${arr.length} de ${currentResults.length} resultados.`;
 }
+
+// === UX: guarda y restaura últimos valores ===
+(function rememberForm(){
+  const fields = ["origin","destination","date","adults","currency","returnDate"];
+  // Restaura
+  try{
+    const saved = JSON.parse(localStorage.getItem("navuara:lastSearch")||"{}");
+    fields.forEach(id => { const el = document.getElementById(id); if(el && saved[id]) el.value = saved[id]; });
+    if(saved.roundTrip){ const chk = document.getElementById("roundTrip"); if(chk){ chk.checked = true; document.getElementById("returnDateWrap").style.display = "block"; } }
+  }catch{}
+  // Guarda en submit
+  const f = document.getElementById("form");
+  f?.addEventListener("submit",()=>{
+    const data = {};
+    fields.forEach(id => { const el = document.getElementById(id); if(el) data[id] = el.value; });
+    data.roundTrip = document.getElementById("roundTrip")?.checked || false;
+    localStorage.setItem("navuara:lastSearch", JSON.stringify(data));
+  });
+})();
+
+// === UX: al terminar de renderizar, mueve la vista a la tabla ===
+(function smoothToResults(){
+  const originalRender = window.renderResults;
+  if(typeof originalRender === "function"){
+    window.renderResults = function(){
+      originalRender();
+      const table = document.getElementById("tabla");
+      if(table && table.style.display !== "none"){
+        table.scrollIntoView({behavior:"smooth", block:"start"});
+      }
+    }
+  }
+})();
