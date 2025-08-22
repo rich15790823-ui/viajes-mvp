@@ -248,3 +248,9 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Servidor en http://0.0.0.0:${PORT}`);
 });
+
+// --- API de prueba para Nerd ---
+app.post("/api/search", (req, res) => {
+  const { origin, dest } = req.body || {};
+  res.json({ ok: true, msg: `Búsqueda recibida: ${origin} → ${dest}` });
+});
