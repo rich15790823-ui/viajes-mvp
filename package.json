@@ -1,23 +1,13 @@
 {
-  "name": "viajes-mvp",
+  "name": "navuara-api",
   "version": "1.0.0",
-  "description": "Proyecto Navuara MVP",
-  "main": "app.js",
+  "type": "module",
+  "main": "index.js",
   "scripts": {
-    "start": "node app.js",
-    "dev": "nodemon app.js"
+    "start": "node index.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "cors": "^2.8.5"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.0"
-  },
-  "engines": {
-    "node": "22.x"
-  },
-  "author": "Rich",
-  "license": "MIT"
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
 }
-
