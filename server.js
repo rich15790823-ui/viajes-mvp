@@ -254,3 +254,19 @@ app.post("/api/search", (req, res) => {
   const { origin, dest } = req.body || {};
   res.json({ ok: true, msg: `Búsqueda recibida: ${origin} → ${dest}` });
 });
+
+app.get("/_debug/routes", (req, res) => {
+  const stack = app._router?.stack || [];
+  const routes = stack
+    .filter(l => l.route)
+    .map(l => ({ method: Object.keys(l.route.methods)[0].toUpperCase(), path: l.route.path }));
+  res.json({ routes });
+});
+
+// /version: para verificar qué build está en Render
+app.get("/version", (req, res) => {
+  res.json({
+    time: new Date().toISOString(),
+    commit: process.env.RENDER_GIT_COMMIT || process.env.VERCEL_GIT_COMMIT || "unknown"
+  });
+});
