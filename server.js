@@ -28,12 +28,25 @@ const todayISO = () => {
 // Handler REAL con Travelpayouts (Aviasales)
 app.post("/api/search", async (req, res) => {
   try {
-    const b = req.body || {};
-    const origin = (b.origin || "").toUpperCase();
-    const dest   = (b.dest   || "").toUpperCase();
-
-    if (!/^[A-Z]{3}$/.test(origin) || !/^[A-Z]{3}$/.test(dest)) {
-      return res.status(400).json({ ok:false, error:"IATA inválido (usa 3 letras, ej. MEX, CUN)" });
+    const b = req.body || {}; const origin=(b.origin||"").toUpperCase(); const dest=(b.dest||"").toUpperCase();
+    if(!/^[A-Z]{3}$/.test(origin)||!/^[A-Z]{3}$/.test(dest)) return res.status(400).json({ok:false,error:"IATA inválido"});
+    const axios=(await import("axios")).default;
+    const token=process.env.TRAVELPAYOUTS_TOKEN;
+    if(!token) return res.status(500).json({ ok:false, error:"Falta TRAVELPAYOUTS_TOKEN" });
+    const params={ origin, destination:dest, currency:"mxn", departure_at:b.date||"2025-09-01", limit:5 };
+    const url="https://api.travelpayouts.com/aviasales/v3/prices_for_dates";
+    const resp=await axios.get(url,{headers:{"X-Access-Token":token},params});
+    const rows=resp.data&&resp.data.data?resp.data.data:[];
+    const items=rows.map((r,i)=>({
+      id:r.id||("TP-"+i), airlineName:r.airline||"Desconocida", airline:r.airline||"Desconocida",
+      origin:r.origin, destination:r.destination, dest:r.destination,
+      price:{amount:r.price,currency:"MXN"}, price_mxn:r.price,
+      departureTime:r.departure_at, depart_at:r.departure_at, return_at:r.return_at, transfers:r.transfers,
+      deeplink:r.link || null
+    }));
+    return res.json({ ok:true, msg:`Resultados reales: ${origin} → ${dest}`, count:items.length, hasResults:items.length>0, results:items, flights:items, data:{ items } });
+  } catch(err){ return res.status(500).json({ ok:false, error:"Provider error", detail: err.response?.data||err.message }); }
+});
     }
 
     const token = process.env.TRAVELPAYOUTS_TOKEN;
@@ -100,4 +113,7 @@ app.post("/api/search", async (req, res) => {
 app.use((_req, res) => res.status(404).send("Not Found (app)"));
 
 const PORT = process.env.PORT || 3000;
+app.get("/", (_req, res) => { res.send("<!doctype html><h1>Navuara</h1><p>OK</p>"); });
+app.get("/whoami", (_req, res) => res.json({ file: __filename, pid: process.pid }));
+
 app.listen(PORT, () => console.log("Servidor corriendo en puerto", PORT));
