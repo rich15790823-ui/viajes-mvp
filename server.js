@@ -274,3 +274,10 @@ app.get("/version", (req, res) => {
 app.get("/api/search-test", (req, res) => {
   res.json({ ok: true, msg: "GET de prueba activo" });
 });
+
+app.use((req, _res, next) => {
+  console.log("REQ", req.method, req.path);
+  console.log("Headers:", req.headers);
+  console.log("Body:", req.body);
+  next();
+});
