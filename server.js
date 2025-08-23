@@ -138,7 +138,15 @@ app.post("/api/search", async (req, res) => {
 });
 
 // 404 claro
+app.get("/", (_req, res) => {
+  res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8" /><title>Navuara</title></head><body><h1>Hola, soy Navuara 🚀</h1><p>Buscador de vuelos en desarrollo.</p></body></html>`);
+});
+
 app.use((_req, res) => res.status(404).send("Not Found (app)"));
 
 const PORT = process.env.PORT || 3000;
+app.get("/", (_req, res) => {
+  res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8" /><title>Navuara</title></head><body><h1>Hola, soy Navuara 🚀</h1><p>Buscador de vuelos en desarrollo.</p></body></html>`);
+});
+
 app.listen(PORT, () => console.log("Servidor corriendo en puerto", PORT));
