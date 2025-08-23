@@ -256,12 +256,21 @@ app.post("/api/search", (req, res) => {
   const dest   = (b.dest||"").toUpperCase();
   if (!origin || !dest) return res.status(400).json({ ok:false, error:"Faltan origin/dest" });
 
-  const results = [
-    { id:"MOCK1", airline:"AeroDemo", origin, dest, price_mxn: 1299, depart_at:"2025-09-01T08:00:00-06:00", arrive_at:"2025-09-01T09:45:00-06:00", duration_min:105, stops:0 },
-    { id:"MOCK2", airline:"AeroDemo", origin, dest, price_mxn: 1499, depart_at:"2025-09-01T18:00:00-06:00", arrive_at:"2025-09-01T19:45:00-06:00", duration_min:105, stops:0 }
+  const items = [
+    { id:"MOCK1", airlineName:"AeroDemo", origin, destination:dest, price:{ amount:1299, currency:"MXN" }, departureTime:"2025-09-01T08:00:00-06:00", arrivalTime:"2025-09-01T09:45:00-06:00", durationMinutes:105, stops:0 },
+    { id:"MOCK2", airlineName:"AeroDemo", origin, destination:dest, price:{ amount:1499, currency:"MXN" }, departureTime:"2025-09-01T18:00:00-06:00", arrivalTime:"2025-09-01T19:45:00-06:00", durationMinutes:105, stops:0 }
   ];
 
-  res.json({ ok:true, msg:`Búsqueda recibida: ${origin} → ${dest}`, results });
+  const payload = {
+    ok: true,
+    msg: `Búsqueda recibida: ${origin} → ${dest}`,
+    count: items.length,
+    hasResults: items.length > 0,
+    results: items,
+    flights: items,
+    data: { items }
+  };
+  res.json(payload);
 });
 
 app.get("/_debug/routes", (req, res) => {
@@ -299,12 +308,21 @@ app.post("/api/search", (req, res) => {
   const dest   = (b.dest||"").toUpperCase();
   if (!origin || !dest) return res.status(400).json({ ok:false, error:"Faltan origin/dest" });
 
-  const results = [
-    { id:"MOCK1", airline:"AeroDemo", origin, dest, price_mxn: 1299, depart_at:"2025-09-01T08:00:00-06:00", arrive_at:"2025-09-01T09:45:00-06:00", duration_min:105, stops:0 },
-    { id:"MOCK2", airline:"AeroDemo", origin, dest, price_mxn: 1499, depart_at:"2025-09-01T18:00:00-06:00", arrive_at:"2025-09-01T19:45:00-06:00", duration_min:105, stops:0 }
+  const items = [
+    { id:"MOCK1", airlineName:"AeroDemo", origin, destination:dest, price:{ amount:1299, currency:"MXN" }, departureTime:"2025-09-01T08:00:00-06:00", arrivalTime:"2025-09-01T09:45:00-06:00", durationMinutes:105, stops:0 },
+    { id:"MOCK2", airlineName:"AeroDemo", origin, destination:dest, price:{ amount:1499, currency:"MXN" }, departureTime:"2025-09-01T18:00:00-06:00", arrivalTime:"2025-09-01T19:45:00-06:00", durationMinutes:105, stops:0 }
   ];
 
-  res.json({ ok:true, msg:`Búsqueda recibida: ${origin} → ${dest}`, results });
+  const payload = {
+    ok: true,
+    msg: `Búsqueda recibida: ${origin} → ${dest}`,
+    count: items.length,
+    hasResults: items.length > 0,
+    results: items,
+    flights: items,
+    data: { items }
+  };
+  res.json(payload);
 });
 
 app.post("/api/search", (req, res) => {
@@ -313,10 +331,19 @@ app.post("/api/search", (req, res) => {
   const dest   = (b.dest||"").toUpperCase();
   if (!origin || !dest) return res.status(400).json({ ok:false, error:"Faltan origin/dest" });
 
-  const results = [
-    { id:"MOCK1", airline:"AeroDemo", origin, dest, price_mxn: 1299, depart_at:"2025-09-01T08:00:00-06:00", arrive_at:"2025-09-01T09:45:00-06:00", duration_min:105, stops:0 },
-    { id:"MOCK2", airline:"AeroDemo", origin, dest, price_mxn: 1499, depart_at:"2025-09-01T18:00:00-06:00", arrive_at:"2025-09-01T19:45:00-06:00", duration_min:105, stops:0 }
+  const items = [
+    { id:"MOCK1", airlineName:"AeroDemo", origin, destination:dest, price:{ amount:1299, currency:"MXN" }, departureTime:"2025-09-01T08:00:00-06:00", arrivalTime:"2025-09-01T09:45:00-06:00", durationMinutes:105, stops:0 },
+    { id:"MOCK2", airlineName:"AeroDemo", origin, destination:dest, price:{ amount:1499, currency:"MXN" }, departureTime:"2025-09-01T18:00:00-06:00", arrivalTime:"2025-09-01T19:45:00-06:00", durationMinutes:105, stops:0 }
   ];
 
-  res.json({ ok:true, msg:`Búsqueda recibida: ${origin} → ${dest}`, results });
+  const payload = {
+    ok: true,
+    msg: `Búsqueda recibida: ${origin} → ${dest}`,
+    count: items.length,
+    hasResults: items.length > 0,
+    results: items,
+    flights: items,
+    data: { items }
+  };
+  res.json(payload);
 });
