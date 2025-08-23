@@ -251,8 +251,17 @@ app.listen(PORT, '0.0.0.0', () => {
 
 // --- API de prueba para Nerd ---
 app.post("/api/search", (req, res) => {
-  const { origin, dest } = req.body || {};
-  res.json({ ok: true, msg: `Búsqueda recibida: ${origin} → ${dest}` });
+  const b = req.body || {};
+  const origin = (b.origin||"").toUpperCase();
+  const dest   = (b.dest||"").toUpperCase();
+  if (!origin || !dest) return res.status(400).json({ ok:false, error:"Faltan origin/dest" });
+
+  const mock = (origin==="MID" && dest==="MTY") ? [
+    { id:"MOCK1", airline:"AeroDemo", origin, dest, price_mxn: 1299, depart_at:"2025-09-01T08:00:00-06:00", arrive_at:"2025-09-01T09:45:00-06:00", duration_min:105, stops:0 },
+    { id:"MOCK2", airline:"AeroDemo", origin, dest, price_mxn: 1499, depart_at:"2025-09-01T18:00:00-06:00", arrive_at:"2025-09-01T19:45:00-06:00", duration_min:105, stops:0 }
+  ] : [];
+
+  res.json({ ok:true, msg:`Búsqueda recibida: ${origin} → ${dest}`, results: mock });
 });
 
 app.get("/_debug/routes", (req, res) => {
@@ -284,17 +293,30 @@ app.use((req, _res, next) => {
 
 // --- API de prueba para Nerd (idempotente) ---
 if (!app._router?.stack?.some(l => l.route && l.route.path === "/api/search")) {
-  app.post("/api/search", (req, res) => {
-    const { origin, dest } = req.body || {};
-    res.json({ ok: true, msg: `Búsqueda recibida: ${origin} → ${dest}` });
-  });
-}
+app.post("/api/search", (req, res) => {
+  const b = req.body || {};
+  const origin = (b.origin||"").toUpperCase();
+  const dest   = (b.dest||"").toUpperCase();
+  if (!origin || !dest) return res.status(400).json({ ok:false, error:"Faltan origin/dest" });
 
-app.get("/__fingerprint", (req, res) => {
-  res.json({ file: __filename });
+  const mock = (origin==="MID" && dest==="MTY") ? [
+    { id:"MOCK1", airline:"AeroDemo", origin, dest, price_mxn: 1299, depart_at:"2025-09-01T08:00:00-06:00", arrive_at:"2025-09-01T09:45:00-06:00", duration_min:105, stops:0 },
+    { id:"MOCK2", airline:"AeroDemo", origin, dest, price_mxn: 1499, depart_at:"2025-09-01T18:00:00-06:00", arrive_at:"2025-09-01T19:45:00-06:00", duration_min:105, stops:0 }
+  ] : [];
+
+  res.json({ ok:true, msg:`Búsqueda recibida: ${origin} → ${dest}`, results: mock });
 });
 
 app.post("/api/search", (req, res) => {
-  const { origin, dest } = req.body || {};
-  res.json({ ok: true, msg: `Búsqueda recibida: ${origin} → ${dest}` });
+  const b = req.body || {};
+  const origin = (b.origin||"").toUpperCase();
+  const dest   = (b.dest||"").toUpperCase();
+  if (!origin || !dest) return res.status(400).json({ ok:false, error:"Faltan origin/dest" });
+
+  const mock = (origin==="MID" && dest==="MTY") ? [
+    { id:"MOCK1", airline:"AeroDemo", origin, dest, price_mxn: 1299, depart_at:"2025-09-01T08:00:00-06:00", arrive_at:"2025-09-01T09:45:00-06:00", duration_min:105, stops:0 },
+    { id:"MOCK2", airline:"AeroDemo", origin, dest, price_mxn: 1499, depart_at:"2025-09-01T18:00:00-06:00", arrive_at:"2025-09-01T19:45:00-06:00", duration_min:105, stops:0 }
+  ] : [];
+
+  res.json({ ok:true, msg:`Búsqueda recibida: ${origin} → ${dest}`, results: mock });
 });
