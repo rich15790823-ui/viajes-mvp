@@ -8,6 +8,39 @@ const Amadeus = require('amadeus');
 
 const app = express();
 
+/* ===== MOCK EARLY HANDLER: /api/search ===== */
+app.post("/api/search", (req, res) => {
+  const b = req.body || {};
+  const origin = (b.origin||"").toUpperCase();
+  const dest   = (b.dest||"").toUpperCase();
+  if (!origin || !dest) return res.status(400).json({ ok:false, error:"Faltan origin/dest" });
+
+  const items = [
+    { id:"MOCK1", airlineName:"AeroDemo", airline:"AeroDemo", origin, destination:dest, dest,
+      price:{ amount:1299, currency:"MXN" }, price_mxn:1299,
+      departureTime:"2025-09-01T08:00:00-06:00", depart_at:"2025-09-01T08:00:00-06:00",
+      arrivalTime:"2025-09-01T09:45:00-06:00",  arrive_at:"2025-09-01T09:45:00-06:00",
+      durationMinutes:105, duration_min:105, stops:0 },
+    { id:"MOCK2", airlineName:"AeroDemo", airline:"AeroDemo", origin, destination:dest, dest,
+      price:{ amount:1499, currency:"MXN" }, price_mxn:1499,
+      departureTime:"2025-09-01T18:00:00-06:00", depart_at:"2025-09-01T18:00:00-06:00",
+      arrivalTime:"2025-09-01T19:45:00-06:00",  arrive_at:"2025-09-01T19:45:00-06:00",
+      durationMinutes:105, duration_min:105, stops:0 }
+  ];
+
+  return res.json({
+    ok:true,
+    msg:`Búsqueda recibida: ${origin} → ${dest}`,
+    count: items.length,
+    hasResults: items.length > 0,
+    results: items,
+    flights: items,
+    data: { items }
+  });
+});
+/* ===== END MOCK EARLY HANDLER ===== */
+
+
 /* ----------------- Config básica ----------------- */
 app.use(cors());
 app.use(express.json());
