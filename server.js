@@ -39,9 +39,7 @@ app.post("/api/search", async (req, res) => {
     }
 
     // Token desde env var o header-proxy (para pruebas)
-    const envToken = process.env.TRAVELPAYOUTS_TOKEN;
-    const headerToken = req.get("X-Access-Token-Proxy");
-    const effToken = headerToken || envToken;
+    const effToken = process.env.TRAVELPAYOUTS_TOKEN;
     if (!effToken) {
       return res.status(500).json({ ok:false, error:"Falta TRAVELPAYOUTS_TOKEN (o envía header X-Access-Token-Proxy)" });
     }
