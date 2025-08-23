@@ -102,4 +102,8 @@ app.post("/api/search", async (req, res) => {
 app.use((_req, res) => res.status(404).send("Not Found (app)"));
 
 const PORT = process.env.PORT || 3000;
+app.get("/whoami", (_req, res) => res.json({ file: __filename, pid: process.pid }));
+app.get("/env", (_req, res) => res.json({ hasToken: Boolean(process.env.TRAVELPAYOUTS_TOKEN) }));
+app.get("/debug/headers", (req, res) => res.json({ headers: req.headers }));
+
 app.listen(PORT, () => console.log("Servidor corriendo en puerto", PORT));
