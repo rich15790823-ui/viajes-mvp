@@ -32,6 +32,9 @@ app.post("/api/search", async (req, res) => {
     if(!/^[A-Z]{3}$/.test(origin)||!/^[A-Z]{3}$/.test(dest)) return res.status(400).json({ok:false,error:"IATA inválido"});
     const axios=(await import("axios")).default;
     const token=process.env.TRAVELPAYOUTS_TOKEN;
+    const headerToken = req.get("X-Access-Token-Proxy");
+    const effToken = headerToken || token;
+    if(!effToken) return res.status(500).json({ ok:false, error:"Falta TRAVELPAYOUTS_TOKEN (o envía X-Access-Token-Proxy)" });
     if(!token) return res.status(500).json({ ok:false, error:"Falta TRAVELPAYOUTS_TOKEN" });
     const params={ origin, destination:dest, currency:"mxn", departure_at:b.date||"2025-09-01", limit:5 };
     const url="https://api.travelpayouts.com/aviasales/v3/prices_for_dates";
