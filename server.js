@@ -7,7 +7,7 @@ app.use(express.json());
 app.use(cors({
   origin: "*",
   methods: ["GET","POST","OPTIONS"],
-  allowedHeaders: ["Content-Type","X-Requested-With"]
+  allowedHeaders: ["Content-Type","X-Requested-With","X-Access-Token-Proxy"]
 }));
 
 // Raíz visible (para validaciones externas)
@@ -15,10 +15,12 @@ app.get("/", (_req, res) => {
   res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8" /><title>Navuara</title></head><body><h1>Hola, soy Navuara 🚀</h1><p>Buscador de vuelos en desarrollo.</p></body></html>`);
 });
 
-// Health JSON (muestra el archivo que corre en Render)
+// Health JSON
 app.get("/health", (_req, res) => res.json({ ok: true, file: __filename }));
 
-// Util: formateo de fechas YYYY-MM-DD -> para Travelpayouts usamos YYYY-MM-DD en 'departure_at'
+// ¿Qué archivo corre?
+app.get("/whoami", (_req, res) => res.json({ file: __filename, pid: process.pid }));
+
 const pad = (n) => (n < 10 ? "0" : "") + n;
 const todayISO = () => {
   const d = new Date();
@@ -28,33 +30,20 @@ const todayISO = () => {
 // Handler REAL con Travelpayouts (Aviasales)
 app.post("/api/search", async (req, res) => {
   try {
-    const b = req.body || {}; const origin=(b.origin||"").toUpperCase(); const dest=(b.dest||"").toUpperCase();
-    if(!/^[A-Z]{3}$/.test(origin)||!/^[A-Z]{3}$/.test(dest)) return res.status(400).json({ok:false,error:"IATA inválido"});
-    const axios=(await import("axios")).default;
-    const token=process.env.TRAVELPAYOUTS_TOKEN;
-    const headerToken = req.get("X-Access-Token-Proxy");
-    const effToken = headerToken || token;
-    if(!effToken) return res.status(500).json({ ok:false, error:"Falta TRAVELPAYOUTS_TOKEN (o envía X-Access-Token-Proxy)" });
-    if(!token) return res.status(500).json({ ok:false, error:"Falta TRAVELPAYOUTS_TOKEN" });
-    const params={ origin, destination:dest, currency:"mxn", departure_at:b.date||"2025-09-01", limit:5 };
-    const url="https://api.travelpayouts.com/aviasales/v3/prices_for_dates";
-    const resp=await axios.get(url,{headers:{"X-Access-Token":token},params});
-    const rows=resp.data&&resp.data.data?resp.data.data:[];
-    const items=rows.map((r,i)=>({
-      id:r.id||("TP-"+i), airlineName:r.airline||"Desconocida", airline:r.airline||"Desconocida",
-      origin:r.origin, destination:r.destination, dest:r.destination,
-      price:{amount:r.price,currency:"MXN"}, price_mxn:r.price,
-      departureTime:r.departure_at, depart_at:r.departure_at, return_at:r.return_at, transfers:r.transfers,
-      deeplink:r.link || null
-    }));
-    return res.json({ ok:true, msg:`Resultados reales: ${origin} → ${dest}`, count:items.length, hasResults:items.length>0, results:items, flights:items, data:{ items } });
-  } catch(err){ return res.status(500).json({ ok:false, error:"Provider error", detail: err.response?.data||err.message }); }
-});
+    const b = req.body || {};
+    const origin = (b.origin || "").toUpperCase();
+    const dest   = (b.dest   || "").toUpperCase();
+
+    if (!/^[A-Z]{3}$/.test(origin) || !/^[A-Z]{3}$/.test(dest)) {
+      return res.status(400).json({ ok:false, error:"IATA inválido (usa 3 letras, ej. MEX, CUN)" });
     }
 
-    const token = process.env.TRAVELPAYOUTS_TOKEN;
-    if (!token) {
-      return res.status(500).json({ ok:false, error:"Falta TRAVELPAYOUTS_TOKEN en el servidor" });
+    // Token desde env var o header-proxy (para pruebas)
+    const envToken = process.env.TRAVELPAYOUTS_TOKEN;
+    const headerToken = req.get("X-Access-Token-Proxy");
+    const effToken = headerToken || envToken;
+    if (!effToken) {
+      return res.status(500).json({ ok:false, error:"Falta TRAVELPAYOUTS_TOKEN (o envía header X-Access-Token-Proxy)" });
     }
 
     // Fecha por defecto hoy (puedes enviar b.date = "2025-09-01")
@@ -70,31 +59,28 @@ app.post("/api/search", async (req, res) => {
     };
 
     const tpResp = await axios.get(url, {
-      headers: { "X-Access-Token": token },
+      headers: { "X-Access-Token": effToken },
       params
     });
 
     const rows = Array.isArray(tpResp.data?.data) ? tpResp.data.data : [];
 
-    // Mapear al formato que ya usa tu front (results / flights / data.items)
-    const items = rows.map((r, i) => {
-      return {
-        id: r.id || `TP-${i}`,
-        airlineName: r.airline || "Desconocida",
-        airline: r.airline || "Desconocida",
-        origin: r.origin,
-        destination: r.destination,
-        dest: r.destination,
-        price: { amount: r.price, currency: "MXN" },
-        price_mxn: r.price,
-        departureTime: r.departure_at,
-        depart_at: r.departure_at,
-        return_at: r.return_at,
-        transfers: r.transfers,
-        // Si el endpoint trae 'link', úsalo como deeplink de afiliado (botón "Reservar")
-        deeplink: r.link || null
-      };
-    });
+    // Mapear al formato que ya usa tu front
+    const items = rows.map((r, i) => ({
+      id: r.id || `TP-${i}`,
+      airlineName: r.airline || "Desconocida",
+      airline: r.airline || "Desconocida",
+      origin: r.origin,
+      destination: r.destination,
+      dest: r.destination,
+      price: { amount: r.price, currency: "MXN" },
+      price_mxn: r.price,
+      departureTime: r.departure_at,
+      depart_at: r.departure_at,
+      return_at: r.return_at,
+      transfers: r.transfers,
+      deeplink: r.link || null
+    }));
 
     return res.json({
       ok: true,
@@ -112,11 +98,8 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// 404 claro
+// 404
 app.use((_req, res) => res.status(404).send("Not Found (app)"));
 
 const PORT = process.env.PORT || 3000;
-app.get("/", (_req, res) => { res.send("<!doctype html><h1>Navuara</h1><p>OK</p>"); });
-app.get("/whoami", (_req, res) => res.json({ file: __filename, pid: process.pid }));
-
 app.listen(PORT, () => console.log("Servidor corriendo en puerto", PORT));
