@@ -289,3 +289,12 @@ if (!app._router?.stack?.some(l => l.route && l.route.path === "/api/search")) {
     res.json({ ok: true, msg: `Búsqueda recibida: ${origin} → ${dest}` });
   });
 }
+
+app.get("/__fingerprint", (req, res) => {
+  res.json({ file: __filename });
+});
+
+app.post("/api/search", (req, res) => {
+  const { origin, dest } = req.body || {};
+  res.json({ ok: true, msg: `Búsqueda recibida: ${origin} → ${dest}` });
+});
