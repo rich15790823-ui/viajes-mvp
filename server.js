@@ -281,3 +281,11 @@ app.use((req, _res, next) => {
   console.log("Body:", req.body);
   next();
 });
+
+// --- API de prueba para Nerd (idempotente) ---
+if (!app._router?.stack?.some(l => l.route && l.route.path === "/api/search")) {
+  app.post("/api/search", (req, res) => {
+    const { origin, dest } = req.body || {};
+    res.json({ ok: true, msg: `Búsqueda recibida: ${origin} → ${dest}` });
+  });
+}
