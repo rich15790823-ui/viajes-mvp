@@ -270,3 +270,7 @@ app.get("/version", (req, res) => {
     commit: process.env.RENDER_GIT_COMMIT || process.env.VERCEL_GIT_COMMIT || "unknown"
   });
 });
+
+app.get("/api/search-test", (req, res) => {
+  res.json({ ok: true, msg: "GET de prueba activo" });
+});
