@@ -30,12 +30,51 @@ const todayISO = () => {
 // Handler REAL con Travelpayouts (Aviasales)
 app.post("/api/search", async (req, res) => {
   try {
-    const b = req.body || {};
-    const origin = (b.origin || "").toUpperCase();
-    const dest   = (b.dest   || "").toUpperCase();
-
-    if (!/^[A-Z]{3}$/.test(origin) || !/^[A-Z]{3}$/.test(dest)) {
-      return res.status(400).json({ ok:false, error:"IATA inválido (usa 3 letras, ej. MEX, CUN)" });
+    const b = req.body || {}; const origin=(b.origin||"").toUpperCase(); const dest=(b.dest||"").toUpperCase();
+    if(!/^[A-Z]{3}$/.test(origin)||!/^[A-Z]{3}$/.test(dest)) return res.status(400).json({ok:false,error:"IATA inválido"});
+    const axios=(await import("axios")).default;
+    const effToken = process.env.TRAVELPAYOUTS_TOKEN || req.get("X-Access-Token-Proxy");
+    if(!effToken) return res.status(500).json({ ok:false, error:"Falta TRAVELPAYOUTS_TOKEN (o envía X-Access-Token-Proxy)" });
+    const pad=n=>n<10?"0"+n:n; const todayISO=()=>{const d=new Date();return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())};
+    const date = b.date || todayISO();
+    const mapRows = (rows)=>rows.map((r,i)=>({
+      id:r.id||("TP-"+i),
+      airlineName:r.airline||"Desconocida", airline:r.airline||"Desconocida",
+      origin:r.origin||origin, destination:r.destination||dest, dest:(r.destination||dest),
+      price:{ amount:r.price, currency:"MXN" }, price_mxn:r.price,
+      departureTime:r.departure_at||r.departure_date, depart_at:r.departure_at||r.departure_date,
+      return_at:r.return_at||null,
+      transfers:(r.transfers!=null?r.transfers:r.number_of_changes),
+      deeplink:r.link||null
+    }));
+    const get1 = async ()=>{
+      const url="https://api.travelpayouts.com/aviasales/v3/prices_for_dates";
+      const params={ origin, destination:dest, currency:"mxn", departure_at:date, limit:20 };
+      const r=await axios.get(url,{ headers:{"X-Access-Token":effToken}, params });
+      return Array.isArray(r.data?.data)?r.data.data:[];
+    };
+    const get2 = async ()=>{
+      const d=new Date(date); d.setDate(d.getDate()+7); const alt=d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+      const url="https://api.travelpayouts.com/aviasales/v3/prices_for_dates";
+      const params={ origin, destination:dest, currency:"mxn", departure_at:alt, limit:20 };
+      const r=await axios.get(url,{ headers:{"X-Access-Token":effToken}, params });
+      return Array.isArray(r.data?.data)?r.data.data:[];
+    };
+    const get3 = async ()=>{
+      const url="https://api.travelpayouts.com/aviasales/v3/prices_latest";
+      const params={ origin, destination:dest, currency:"mxn", limit:20, page:1 };
+      const r=await axios.get(url,{ headers:{"X-Access-Token":effToken}, params });
+      return Array.isArray(r.data?.data)?r.data.data:[];
+    };
+    let rows = await get1();
+    if(rows.length===0) rows = await get2();
+    if(rows.length===0) rows = await get3();
+    const items = mapRows(rows);
+    return res.json({ ok:true, msg:`Resultados reales: ${origin} → ${dest} (${items.length})`, count:items.length, hasResults:items.length>0, results:items, flights:items, data:{ items } });
+  } catch(err){
+    return res.status(err.response?.status||500).json({ ok:false, error:"Provider error", detail: err.response?.data||err.message });
+  }
+});
     }
 
     // Token desde env var o header-proxy (para pruebas)
