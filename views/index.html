@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Navuara – Autocomplete</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif; padding:24px; max-width:720px; margin:0 auto;}
+    button{margin-top:12px; padding:10px 14px; border-radius:10px; border:1px solid #ddd; cursor:pointer;}
+  </style>
+</head>
+<body>
+  <h1>Navuara – Autocompletado</h1>
+  <div class="nv-search" style="margin-top:16px;">
+    <label>Origen</label>
+    <input id="nv-origin" autocomplete="off" placeholder="Ciudad o aeropuerto (p.ej. MEX, Cancún)">
+    <div id="nv-origin-dd" class="nv-dd"></div>
+
+    <label style="margin-top:12px;">Destino</label>
+    <input id="nv-dest" autocomplete="off" placeholder="Ciudad o aeropuerto (p.ej. CUN, Madrid)">
+    <div id="nv-dest-dd" class="nv-dd"></div>
+
+    <label style="margin-top:12px;">Ruta rápida (opcional)</label>
+    <input id="nv-route" autocomplete="off" placeholder="MEX CUN ó MID-MTY">
+  </div>
+
+  <button id="nv-search-btn">Buscar</button>
+
+  <script src="/js/autocomplete.js"></script>
+  <script>
+    document.getElementById("nv-search-btn").addEventListener("click", ()=>{
+      const from = document.getElementById("nv-origin")?.value.trim().toUpperCase();
+      const to   = document.getElementById("nv-dest")?.value.trim().toUpperCase();
+      if(!from || !to) return alert("Elige origen y destino");
+      alert("Buscar: " + from + " → " + to);
+    });
+  </script>
+</body>
+</html>

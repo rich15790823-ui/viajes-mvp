@@ -1,14 +1,19 @@
 import express from "express";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 import { placesHandler } from "./api/places.js";
 
-const app = express();
-app.use(express.static("public"));
-app.use(cors());
-app.get("/api/places", placesHandler);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Salud
+const app = express();
+app.use(cors());
+app.use(express.static("public"));
+
+app.get("/api/places", placesHandler);
 app.get("/api/health", (_req,res)=>res.send("ok"));
+app.get("/", (_req,res)=>res.sendFile(path.join(__dirname, "../views/index.html")));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, ()=> console.log("server on", PORT));
