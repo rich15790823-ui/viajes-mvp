@@ -1,0 +1,6 @@
+[
+  {"id":"MEX","code":"MEX","name":"Benito Juárez Intl","city":"Mexico City","country":"Mexico","type":"airport"},
+  {"id":"CUN","code":"CUN","name":"Cancún Intl","city":"Cancún","country":"Mexico","type":"airport"},
+  {"id":"MID","code":"MID","name":"Manuel Crescencio Rejón","city":"Mérida","country":"Mexico","type":"airport"},
+  {"id":"MTY","code":"MTY","name":"Gral. Mariano Escobedo","city":"Monterrey","country":"Mexico","type":"airport"}
+]
