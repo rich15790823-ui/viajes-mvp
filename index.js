@@ -14,3 +14,7 @@ app.post("/api/search", (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Servidor corriendo en puerto", PORT));
+
+app.get("/__fingerprint", (req, res) => {
+  res.json({ file: __filename });
+});
