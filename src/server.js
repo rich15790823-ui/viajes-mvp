@@ -12,9 +12,9 @@ const app = express();
 app.use(cors());
 app.use(express.static("public"));
 
+app.get("/api/health", (_req,res)=>res.send("ok"));
 app.get("/api/places", placesHandler);
 app.get("/api/flights", flightsHandler);
-app.get("/api/health", (_req,res)=>res.send("ok"));
 app.get("/", (_req,res)=>res.sendFile(path.join(__dirname, "../views/index.html")));
 
 const PORT = process.env.PORT || 3000;

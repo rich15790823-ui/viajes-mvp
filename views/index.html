@@ -1,2 +1,52 @@
-<!doctype html><meta charset="utf-8"><title>Navuara</title>
-ok
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Navuara</title>
+<style>
+  body{font-family:system-ui,Inter,Roboto,sans-serif;padding:24px;max-width:980px;margin:0 auto}
+  .row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  input,button{padding:10px 12px;border:1px solid #ddd;border-radius:10px}
+  .flights{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+  .card{border:1px solid #eee;border-radius:12px;padding:12px;background:#fff;box-shadow:0 8px 20px rgba(0,0,0,.04)}
+</style>
+</head><body>
+<h1>Navuara – demo funcional</h1>
+<div class="row">
+  <input id="from" placeholder="MEX">
+  <input id="to" placeholder="CUN">
+  <input id="date" type="date" value="2025-08-25">
+  <button id="btn">Buscar</button>
+</div>
+<div id="flights" class="flights"></div>
+<script>
+const AIR={AM:"Aeroméxico",VB:"Viva Aerobus",Y4:"Volaris"};
+const t=s=>{const d=new Date(s);return isNaN(d)?"-":d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})};
+const card=f=>`
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:700">${AIR[(f.airlineName||f.airline||"").toUpperCase()]||f.airlineName||f.airline} <span style="opacity:.6">(${(f.airlineName||f.airline||"").toUpperCase()})</span></div>
+        <div style="opacity:.85">${f.origin} → ${f.destination}</div>
+      </div>
+      <div style="text-align:right">
+        <div>Sale: <strong>${t(f.departureTime||f.depart_at)}</strong></div>
+        <div>Llega: <strong>${t(f.arrivalTime||f.arr_time)}</strong></div>
+      </div>
+    </div>
+    <div style="margin-top:6px;opacity:.9">
+      ${(f.price&&f.price.amount)?'Desde: <strong>'+(f.price.currency||'MXN')+' '+f.price.amount+'</strong>': (f.price_mxn? 'Desde: <strong>MXN '+f.price_mxn+'</strong>':'')}
+    </div>
+    ${f.deeplink?'<a href="'+f.deeplink+'" target="_blank" style="display:inline-block;margin-top:8px;color:#2f2c79">Reservar</a>':''}
+  </div>`;
+async function go(){
+  const from=(document.getElementById("from").value||"MEX").toUpperCase();
+  const to=(document.getElementById("to").value||"CUN").toUpperCase();
+  const date=document.getElementById("date").value||"2025-08-25";
+  const r=await fetch(`/api/flights?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${encodeURIComponent(date)}`);
+  if(!r.ok){alert("Error de red o servidor");return}
+  const j=await r.json();
+  const list=j.results||j.flights||j.data?.items||[];
+  document.getElementById("flights").innerHTML=list.map(card).join("");
+}
+document.getElementById("btn").addEventListener("click", go);
+</script>
+</body></html>
