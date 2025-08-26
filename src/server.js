@@ -1,21 +1,53 @@
-import express from "express";
-import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
-import { placesHandler } from "./api/places.js";
-import { flightsHandler } from "./api/flights.js";
+import express from 'express';
+import path from 'path';
+import cors from 'cors';
+import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname  = path.dirname(__filename);
 
 const app = express();
-app.use(cors());
-app.use(express.static("public"));
+app.use(express.json());
+app.use(cors({ origin: '*' }));
 
-app.get("/api/health", (_req,res)=>res.send("ok"));
-app.get("/api/places", placesHandler);
-app.get("/api/flights", flightsHandler);
-app.get("/", (_req,res)=>res.sendFile(path.join(__dirname, "../views/index.html")));
+// Servir la UI desde /public (un nivel arriba de /src)
+const publicDir = path.join(__dirname, '..', 'public');
+app.use(express.static(publicDir));
+
+// Raíz -> index.html
+app.get('/', (req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+// Health
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, at: new Date().toISOString() });
+});
+
+// MOCK /api/search (para probar en Render)
+app.get('/api/search', (req, res) => {
+  const { from = '', to = '' } = req.query;
+  if (from.toUpperCase() === 'MEX' && to.toUpperCase() === 'CUN') {
+    return res.json({
+      ok: true,
+      results: [
+        {
+          id: 'TP-0',
+          airlineName: 'Y4',
+          origin: 'MEX',
+          destination: 'CUN',
+          price: { amount: 1877, currency: 'MXN' },
+          depart_at: new Date(Date.now() + 72 * 3600 * 1000).toISOString(),
+          transfers: 0,
+          deeplink: '/search'
+        }
+      ]
+    });
+  }
+  return res.json({ ok: true, results: [] });
+});
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, ()=> console.log("server on", PORT));
+app.listen(PORT, () => {
+  console.log('Navuara escuchando en', PORT);
+});
