@@ -1,0 +1,10 @@
+:root{--bg:#f4f4f4;--ink:#2f2c79;--acc:#feff66}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:16px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.wrap{max-width:960px;margin:24px auto;padding:0 16px}
+h1{color:var(--ink);margin:16px 0}
+.card{background:#fff;border-radius:14px;padding:14px;box-shadow:0 4px 18px rgba(0,0,0,.06);display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px}
+.card input, .card button{padding:12px;border:1px solid #ddd;border-radius:10px}
+.card button{border:0;background:var(--ink);color:#fff;font-weight:700;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:16px}
+.result{background:#fff;border-radius:12px;padding:12px;box-shadow:0 4px 16px rgba(0,0,0,.05)}
+.badge{display:inline-block;background:var(--acc);padding:2px 8px;border-radius:999px;font-weight:700}
