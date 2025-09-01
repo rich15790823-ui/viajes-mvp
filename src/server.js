@@ -28,11 +28,21 @@ app.get('/', (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, at: new Date().toISOString() }));
 
-// SUGGEST (con dataset local)
-const airportsPath = path.join(__dirname, 'data', 'airports.json');
-let airports = [];
-try { airports = JSON.parse(fs.readFileSync(airportsPath, 'utf8')); } catch {}
+// /api/version para confirmar que Render tomó este commit
+app.get('/api/version', (req, res) => {
+  let v = 'unknown';
+  try { v = fs.readFileSync(path.join(__dirname, '..', '.version'), 'utf8').trim(); } catch {}
+  res.json({ ok: true, version: v });
+});
 
+// Dataset local para suggest
+let airports = [];
+try {
+  const airportsPath = path.join(__dirname, 'data', 'airports.json');
+  airports = JSON.parse(fs.readFileSync(airportsPath,'utf8'));
+} catch { airports = []; }
+
+// Handlers
 function suggestHandler(req, res){
   const q = (req.query.q || req.body?.q || '').toString().trim().toLowerCase();
   const limit = Math.max(1, Math.min(20, parseInt((req.query.limit || req.body?.limit || '8'),10)));
@@ -42,14 +52,9 @@ function suggestHandler(req, res){
     a.city.toLowerCase().includes(q) ||
     a.name.toLowerCase().includes(q)
   ).slice(0, limit);
-  return res.json({ ok:true, results });
+  res.json({ ok:true, results });
 }
-app.get('/api/suggest', suggestHandler);
-app.post('/api/suggest', suggestHandler);
-app.get('/suggest', suggestHandler);
-app.post('/suggest', suggestHandler);
 
-// SEARCH (MOCK) acepta GET/POST y alias, y keys from/origin, to/destination
 function norm(s){ return (s||'').toString().trim().toUpperCase(); }
 function searchHandler(req, res){
   const q = { ...req.query, ...(req.body||{}) };
@@ -75,12 +80,19 @@ function searchHandler(req, res){
   }
   return res.json({ ok:true, results:[] });
 }
+
+// Rutas GET/POST y alias con/sin /api
+app.get('/api/suggest', suggestHandler);
+app.post('/api/suggest', suggestHandler);
+app.get('/suggest', suggestHandler);
+app.post('/suggest', suggestHandler);
+
 app.get('/api/search', searchHandler);
 app.post('/api/search', searchHandler);
 app.get('/search', searchHandler);
 app.post('/search', searchHandler);
 
-// SPA 404 fallback (opcional, ayuda si tu front tiene rutas)
+// SPA fallback
 app.get('*', (req,res)=>{
   if (req.path.startsWith('/api/')) return res.status(404).json({ ok:false, error:'Not found' });
   res.sendFile(path.join(publicDir, 'index.html'));
