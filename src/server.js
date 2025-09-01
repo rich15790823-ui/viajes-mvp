@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import cors from 'cors';
+import axios from 'axios';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,35 +19,21 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, at: new Date().toISOString() });
 });
 
-app.get('/api/search', (req, res) => {
-  const { from = '', to = '' } = req.query;
-  const F = from.toUpperCase(), T = to.toUpperCase();
+const SEARCH_URL = process.env.SEARCH_URL || '';
 
-  if (F === 'MEX' && T === 'CUN') {
-    return res.json({
-      ok: true,
-      results: [{
-        id: 'TP-0', airlineName: 'Y4', origin: 'MEX', destination: 'CUN',
-        price: { amount: 1877, currency: 'MXN' },
-        depart_at: new Date(Date.now() + 72*3600*1000).toISOString(),
-        transfers: 0, deeplink: '/search'
-      }]
-    });
+app.get('/api/search', async (req, res) => {
+  try {
+    const { from, to, date } = req.query;
+    if (!from || !to) return res.status(400).json({ ok:false, error:'Faltan parámetros from/to' });
+    if (!SEARCH_URL) return res.status(500).json({ ok:false, error:'SEARCH_URL no configurada' });
+
+    const { data } = await axios.get(SEARCH_URL, { params: { from, to, date } });
+    const results = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
+    return res.json({ ok:true, results });
+  } catch (err) {
+    console.error('search error:', err?.response?.data || err.message);
+    return res.status(502).json({ ok:false, error:'Upstream failed' });
   }
-
-  if (F === 'MID' && T === 'MTY') {
-    return res.json({
-      ok: true,
-      results: [{
-        id: 'TP-1', airlineName: 'AM', origin: 'MID', destination: 'MTY',
-        price: { amount: 2499, currency: 'MXN' },
-        depart_at: new Date(Date.now() + 96*3600*1000).toISOString(),
-        transfers: 1, deeplink: '/search'
-      }]
-    });
-  }
-
-  return res.json({ ok: true, results: [] });
 });
 
 const PORT = process.env.PORT || 3000;
