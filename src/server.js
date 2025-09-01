@@ -10,44 +10,36 @@ const app = express();
 app.use(express.json());
 app.use(cors({ origin: '*' }));
 
-// Servir la UI desde /public (un nivel arriba de /src)
+// servir UI
 const publicDir = path.join(__dirname, '..', 'public');
 app.use(express.static(publicDir));
+app.get('/', (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
 
-// Raíz -> index.html
-app.get('/', (req, res) => {
-  res.sendFile(path.join(publicDir, 'index.html'));
-});
-
-// Health
+// health
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, at: new Date().toISOString() });
 });
 
-// MOCK /api/search (para probar en Render)
+// MOCK /api/search (responde sólo MEX -> CUN)
 app.get('/api/search', (req, res) => {
   const { from = '', to = '' } = req.query;
   if (from.toUpperCase() === 'MEX' && to.toUpperCase() === 'CUN') {
     return res.json({
       ok: true,
-      results: [
-        {
-          id: 'TP-0',
-          airlineName: 'Y4',
-          origin: 'MEX',
-          destination: 'CUN',
-          price: { amount: 1877, currency: 'MXN' },
-          depart_at: new Date(Date.now() + 72 * 3600 * 1000).toISOString(),
-          transfers: 0,
-          deeplink: '/search'
-        }
-      ]
+      results: [{
+        id: 'TP-0',
+        airlineName: 'Y4',
+        origin: 'MEX',
+        destination: 'CUN',
+        price: { amount: 1877, currency: 'MXN' },
+        depart_at: new Date(Date.now() + 72*3600*1000).toISOString(),
+        transfers: 0,
+        deeplink: '/search'
+      }]
     });
   }
   return res.json({ ok: true, results: [] });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log('Navuara escuchando en', PORT);
-});
+app.listen(PORT, () => console.log('Navuara escuchando en', PORT));
