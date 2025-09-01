@@ -1,0 +1,17 @@
+[
+  {"iata":"MEX","city":"Ciudad de México","country":"México","name":"AICM Benito Juárez"},
+  {"iata":"NLU","city":"Ciudad de México","country":"México","name":"AIFA Felipe Ángeles"},
+  {"iata":"CUN","city":"Cancún","country":"México","name":"Aeropuerto Intl de Cancún"},
+  {"iata":"MID","city":"Mérida","country":"México","name":"Manuel Crescencio Rejón"},
+  {"iata":"MTY","city":"Monterrey","country":"México","name":"General Mariano Escobedo"},
+  {"iata":"GDL","city":"Guadalajara","country":"México","name":"Miguel Hidalgo y Costilla"},
+  {"iata":"TIJ","city":"Tijuana","country":"México","name":"Abelardo L. Rodríguez"},
+  {"iata":"BJX","city":"León/Guanajuato","country":"México","name":"Del Bajío"},
+  {"iata":"PVR","city":"Puerto Vallarta","country":"México","name":"Lic. Gustavo Díaz Ordaz"},
+  {"iata":"SJD","city":"San José del Cabo","country":"México","name":"Los Cabos"},
+  {"iata":"QRO","city":"Querétaro","country":"México","name":"Intercontinental de Querétaro"},
+  {"iata":"JFK","city":"New York","country":"USA","name":"John F. Kennedy"},
+  {"iata":"MIA","city":"Miami","country":"USA","name":"Miami Intl"},
+  {"iata":"LAX","city":"Los Angeles","country":"USA","name":"Los Angeles Intl"},
+  {"iata":"MAD","city":"Madrid","country":"España","name":"Adolfo Suárez Madrid-Barajas"}
+]

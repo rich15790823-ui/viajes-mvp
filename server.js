@@ -1,23 +1,23 @@
 const express = require('express');
 const path = require('path');
-const app = express();
 
+const app = express();
 app.use(express.json());
 
-// servir UI de /public
+// Servir UI de /public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// raíz -> index.html
+// Raíz -> index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// health check
+// Health
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, at: new Date().toISOString() });
 });
 
-// MOCK de /api/search (para probar la UI)
+// MOCK de /api/search para probar
 app.get('/api/search', (req, res) => {
   const { from = '', to = '' } = req.query;
   if (from.toUpperCase() === 'MEX' && to.toUpperCase() === 'CUN') {
