@@ -28,21 +28,20 @@ app.get('/', (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, at: new Date().toISOString() }));
 
-// /api/version para confirmar que Render tomó este commit
+// /api/version (lee .version si existe)
 app.get('/api/version', (req, res) => {
   let v = 'unknown';
   try { v = fs.readFileSync(path.join(__dirname, '..', '.version'), 'utf8').trim(); } catch {}
   res.json({ ok: true, version: v });
 });
 
-// Dataset local para suggest
+// /api/suggest (dataset local)
 let airports = [];
 try {
-  const airportsPath = path.join(__dirname, 'data', 'airports.json');
-  airports = JSON.parse(fs.readFileSync(airportsPath,'utf8'));
+  const ap = path.join(__dirname, 'data', 'airports.json');
+  airports = JSON.parse(fs.readFileSync(ap,'utf8'));
 } catch { airports = []; }
 
-// Handlers
 function suggestHandler(req, res){
   const q = (req.query.q || req.body?.q || '').toString().trim().toLowerCase();
   const limit = Math.max(1, Math.min(20, parseInt((req.query.limit || req.body?.limit || '8'),10)));
@@ -55,6 +54,7 @@ function suggestHandler(req, res){
   res.json({ ok:true, results });
 }
 
+// /api/search MOCK con alias y GET/POST
 function norm(s){ return (s||'').toString().trim().toUpperCase(); }
 function searchHandler(req, res){
   const q = { ...req.query, ...(req.body||{}) };
@@ -81,7 +81,6 @@ function searchHandler(req, res){
   return res.json({ ok:true, results:[] });
 }
 
-// Rutas GET/POST y alias con/sin /api
 app.get('/api/suggest', suggestHandler);
 app.post('/api/suggest', suggestHandler);
 app.get('/suggest', suggestHandler);
