@@ -140,21 +140,62 @@ function mapOffer(offer) {
   };
 }
 
-router.post('/api/vuelos/buscar', async (req, res) => {
+// Acepta GET y POST para facilitar integración desde Nerd
+router.all('/api/vuelos/buscar', async (req, res) => {
   try {
-    const body = req.body || {};
-    // Acepta varios nombres de campos para que funcione con diferentes mapeos de formularios
-    const _origen = (body.origen || body.origin || body.from || body.originLocationCode || body.originCode || '').toString().trim().toUpperCase();
-    const _destino = (body.destino || body.destination || body.to || body.destinationLocationCode || body.destinationCode || '').toString().trim().toUpperCase();
-    const _fechaIda = (body.fechaIda || body.departureDate || body.date || body.departure || '').toString().trim();
-    const _fechaVuelta = (body.fechaVuelta || body.returnDate || body.return || '').toString().trim();
-    const _adultos = Number(body.adultos || body.adults || body.passengers || 1);
-    const _cabina = (body.cabina || body.travelClass || 'ECONOMY').toString().trim().toUpperCase();
-    const _moneda = (body.moneda || body.currency || 'MXN').toString().trim().toUpperCase();
-    const _max = Number(body.max || 20);
+    const input = { ...(req.query || {}), ...(req.body || {}) };
+
+    // Acepta múltiples nombres de campos
+    const _origen = (input.origen || input.origin || input.from || input.originLocationCode || input.originCode || '').toString().trim().toUpperCase();
+    const _destino = (input.destino || input.destination || input.to || input.destinationLocationCode || input.destinationCode || '').toString().trim().toUpperCase();
+    const _fechaIda = (input.fechaIda || input.departureDate || input.date || input.departure || '').toString().trim();
+    const _fechaVuelta = (input.fechaVuelta || input.returnDate || input.return || '').toString().trim();
+    const _adultos = Number(input.adultos || input.adults || input.passengers || 1);
+    const _cabina = (input.cabina || input.travelClass || 'ECONOMY').toString().trim().toUpperCase();
+    const _moneda = (input.moneda || input.currency || 'MXN').toString().trim().toUpperCase();
+    const _max = Number(input.max || 20);
 
     if (!_origen || !_destino || !_fechaIda) {
       return res.status(400).json({ ok:false, error:'Faltan parámetros: origen/destino/fechaIda' });
+    }
+
+    // 1) Intento A: directos
+    const paramsDirect = buildParams({ origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined, adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:_max });
+    let offers = await searchOffers(paramsDirect);
+
+    let message;
+    if (offers.length > 0) {
+      message = 'Directos encontrados';
+    } else {
+      // 2) Intento B: permitir escalas → quedarnos con <=1
+      const paramsAny = buildParams({ origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined, adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:false, max:50 });
+      const offersAny = await searchOffers(paramsAny);
+      offers = offersAny.filter(hasAtMostOneConnection);
+      message = offers.length > 0 ? 'No hay directos, mostrando 1 escala' : 'Sin resultados';
+    }
+
+    // Orden: precio asc; empate por duración de ida
+    offers.sort((a, b) => {
+      const pa = Number(a?.price?.grandTotal || Infinity);
+      const pb = Number(b?.price?.grandTotal || Infinity);
+      if (pa !== pb) return pa - pb;
+      const da = a?.itineraries?.[0]?.duration || '';
+      const db = b?.itineraries?.[0]?.duration || '';
+      return da.localeCompare(db);
+    });
+
+    const payload = {
+      ok: true,
+      message,
+      ofertas: offers.map(mapOffer).slice(0, Number(_max) || 20),
+    };
+
+    res.status(200).json(payload);
+  } catch (err) {
+    console.error('[/api/vuelos/buscar] Error:', err);
+    res.status(500).json({ error: 'SEARCH_FAILED', detail: String(err?.message || err) });
+  }
+});
     }
 
     // 1) Intento A: directos
