@@ -142,19 +142,58 @@ function mapOffer(offer) {
 
 router.post('/api/vuelos/buscar', async (req, res) => {
   try {
-    const {
-      origen,
-      destino,
-      fechaIda,
-      fechaVuelta,
-      adultos = 1,
-      cabina,
-      moneda = 'MXN',
-      max = 20,
-    } = req.body || {};
+    const body = req.body || {};
+    // Acepta varios nombres de campos para que funcione con diferentes mapeos de formularios
+    const _origen = (body.origen || body.origin || body.from || body.originLocationCode || body.originCode || '').toString().trim().toUpperCase();
+    const _destino = (body.destino || body.destination || body.to || body.destinationLocationCode || body.destinationCode || '').toString().trim().toUpperCase();
+    const _fechaIda = (body.fechaIda || body.departureDate || body.date || body.departure || '').toString().trim();
+    const _fechaVuelta = (body.fechaVuelta || body.returnDate || body.return || '').toString().trim();
+    const _adultos = Number(body.adultos || body.adults || body.passengers || 1);
+    const _cabina = (body.cabina || body.travelClass || 'ECONOMY').toString().trim().toUpperCase();
+    const _moneda = (body.moneda || body.currency || 'MXN').toString().trim().toUpperCase();
+    const _max = Number(body.max || 20);
+
+    if (!_origen || !_destino || !_fechaIda) {
+      return res.status(400).json({ ok:false, error:'Faltan parámetros: origen/destino/fechaIda' });
+    }
 
     // 1) Intento A: directos
-    const paramsDirect = buildParams({ origen, destino, fechaIda, fechaVuelta, adultos, cabina, moneda, nonStop: true, max });
+    const paramsDirect = buildParams({ origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined, adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:_max });
+    let offers = await searchOffers(paramsDirect);
+
+    let message;
+    if (offers.length > 0) {
+      message = 'Directos encontrados';
+    } else {
+      // 2) Intento B: permitir escalas → quedarnos con <=1
+      const paramsAny = buildParams({ origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined, adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:false, max:50 });
+      const offersAny = await searchOffers(paramsAny);
+      offers = offersAny.filter(hasAtMostOneConnection);
+      message = offers.length > 0 ? 'No hay directos, mostrando 1 escala' : 'Sin resultados';
+    }
+
+    // Orden: precio asc; empate por duración de ida
+    offers.sort((a, b) => {
+      const pa = Number(a?.price?.grandTotal || Infinity);
+      const pb = Number(b?.price?.grandTotal || Infinity);
+      if (pa !== pb) return pa - pb;
+      const da = a?.itineraries?.[0]?.duration || '';
+      const db = b?.itineraries?.[0]?.duration || '';
+      return da.localeCompare(db);
+    });
+
+    const payload = {
+      ok: true,
+      message,
+      ofertas: offers.map(mapOffer).slice(0, Number(_max) || 20),
+    };
+
+    res.status(200).json(payload);
+  } catch (err) {
+    console.error('[/api/vuelos/buscar] Error:', err);
+    res.status(500).json({ error: 'SEARCH_FAILED', detail: String(err?.message || err) });
+  }
+});
     let offers = await searchOffers(paramsDirect);
 
     let message;
