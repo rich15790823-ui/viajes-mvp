@@ -195,40 +195,82 @@ router.all('/api/vuelos/buscar', async (req, res) => {
   }
 });
 
-// Autocomplete de aeropuertos/ciudades desde Amadeus
+// Autocomplete de aeropuertos/ciudades desde Amadeus (ampliado)
 router.get('/api/airports/suggest', async (req, res) => {
   try {
-    const q = (req.query.q || '').toString().trim();
+    const qRaw = (req.query.q || '').toString().trim();
+    const q = qRaw.replace(/\s+/g, ' ');
     const limit = Math.min(20, parseInt(req.query.limit || '8', 10) || 8);
     if (q.length < 2) return res.json({ ok: true, results: [] });
 
-    const token = await getAccessToken(); // ya existe arriba
-    const params = new URLSearchParams({
+    const token = await getAccessToken();
+
+    // 1) CITY + AIRPORT
+    const p1 = new URLSearchParams({
       keyword: q,
       subType: 'CITY,AIRPORT',
       'page[limit]': String(limit),
-      sort: 'analytics.travelers.score',
+      view: 'FULL'
+      // OJO: quitamos sort=analytics para no sesgar a pocos “populares”
     });
-
-    const resp = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations?${params}`, {
+    const r1 = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations?${p1}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!resp.ok) {
-      const txt = await resp.text().catch(()=> '');
-      throw new Error(`Amadeus locations ${resp.status} ${txt}`);
-    }
-    const data = await resp.json();
-    const results = (data?.data || []).map(d => ({
-      iata: d.iataCode,
-      city: d.address?.cityName || d.name,
-      name: d.name
-    }));
+    const j1 = r1.ok ? await r1.json() : { data: [] };
 
-    res.json({ ok: true, results });
+    // 2) SOLO AIRPORTS (a veces trae diferentes matches)
+    const p2 = new URLSearchParams({
+      keyword: q,
+      'page[limit]': String(limit)
+    });
+    const r2 = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations/airports?${p2}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const j2 = r2.ok ? await r2.json() : { data: [] };
+
+    // Normalizar
+    const norm = d => ({
+      iata: d.iataCode,
+      city: d.address?.cityName || d.name || '',
+      name: d.name || '',
+    });
+
+    const raw = [
+      ...(Array.isArray(j1.data) ? j1.data : []),
+      ...(Array.isArray(j2.data) ? j2.data : [])
+    ].filter(d => d?.iataCode);
+
+    // Deduplicar por IATA
+    const byIata = new Map();
+    for (const d of raw) {
+      const n = norm(d);
+      if (!byIata.has(n.iata)) byIata.set(n.iata, n);
+    }
+    let results = Array.from(byIata.values());
+
+    // Si el usuario teclea un IATA (3 letras), empuja ese primero
+    const iataGuess = (q.length === 3 && /^[A-Za-z]{3}$/.test(q)) ? q.toUpperCase() : null;
+    if (iataGuess && !byIata.has(iataGuess)) {
+      results.unshift({ iata: iataGuess, city: iataGuess, name: 'Typed code' });
+    }
+
+    // Orden: exact IATA primero, luego coincidencia por prefijo en ciudad/nombre, luego alfabético
+    const qLower = q.toLowerCase();
+    results.sort((a, b) => {
+      const aExact = (a.iata || '').toUpperCase() === (iataGuess || '');
+      const bExact = (b.iata || '').toUpperCase() === (iataGuess || '');
+      if (aExact !== bExact) return aExact ? -1 : 1;
+
+      const aHit = (a.city||'').toLowerCase().startsWith(qLower) || (a.name||'').toLowerCase().startsWith(qLower);
+      const bHit = (b.city||'').toLowerCase().startsWith(qLower) || (b.name||'').toLowerCase().startsWith(qLower);
+      if (aHit !== bHit) return aHit ? -1 : 1;
+
+      return (a.city||a.name||a.iata).localeCompare(b.city||b.name||b.iata);
+    });
+
+    res.json({ ok: true, results: results.slice(0, limit) });
   } catch (err) {
     console.error('[/api/airports/suggest] Error:', err);
     res.status(500).json({ ok:false, error:'SUGGEST_FAILED', detail: String(err?.message || err) });
   }
 });
-
-export default router;
