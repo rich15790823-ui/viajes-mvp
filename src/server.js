@@ -9,28 +9,30 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 
-// ⬅️ nuestro endpoint de Amadeus
+// Nuestro endpoint de Amadeus
 import vuelosRouter from './routes/amadeusFlightsEndpoint.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-app.set('trust proxy', 1);
-
 const app = express();
 app.disable('x-powered-by');
+
+// Para proxies (Render) y evitar warning de rate-limit
+app.set('trust proxy', 1);
 
 // Logs + seguridad básica
 app.use(morgan('tiny'));
 app.use(compression());
 app.use(helmet());
 
-// ✅ CORS abierto (para probar) + preflight OPTIONS
+// CORS abierto para pruebas + preflight
 app.use(cors());
 app.options('*', cors());
 
-// Body parser
+// Parsers
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Rate limit para /api
 const apiLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
@@ -49,7 +51,7 @@ app.get('/api/version', (req, res) => {
   res.json({ ok: true, version: v });
 });
 
-// -------- Autocomplete/local MOCK opcional (lo que ya tenías) --------
+// ---- MOCK opcional (lo puedes borrar cuando ya tengas Amadeus pintando) ----
 const cache = new Map();
 const getC = k => { const e = cache.get(k); if (!e) return null; if (Date.now() > e.exp) { cache.delete(k); return null; } return e.val; };
 const setC = (k, val, ttlMs) => cache.set(k, { val, exp: Date.now() + ttlMs });
@@ -89,7 +91,7 @@ function searchHandler(req, res) {
   const hit = getC(key);
   if (hit) { res.set('X-Cache', 'HIT'); return res.json(hit); }
 
-  // MOCK mínimo, puedes borrar si ya no lo usas
+  // MOCK ejemplo
   let results = [];
   if (from === 'MEX' && to === 'CUN') {
     results = [{ id:'TP-0', airlineName:'Y4', origin:'MEX', destination:'CUN',
