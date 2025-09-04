@@ -195,4 +195,40 @@ router.all('/api/vuelos/buscar', async (req, res) => {
   }
 });
 
+// Autocomplete de aeropuertos/ciudades desde Amadeus
+router.get('/api/airports/suggest', async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    const limit = Math.min(20, parseInt(req.query.limit || '8', 10) || 8);
+    if (q.length < 2) return res.json({ ok: true, results: [] });
+
+    const token = await getAccessToken(); // ya existe arriba
+    const params = new URLSearchParams({
+      keyword: q,
+      subType: 'CITY,AIRPORT',
+      'page[limit]': String(limit),
+      sort: 'analytics.travelers.score',
+    });
+
+    const resp = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations?${params}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(()=> '');
+      throw new Error(`Amadeus locations ${resp.status} ${txt}`);
+    }
+    const data = await resp.json();
+    const results = (data?.data || []).map(d => ({
+      iata: d.iataCode,
+      city: d.address?.cityName || d.name,
+      name: d.name
+    }));
+
+    res.json({ ok: true, results });
+  } catch (err) {
+    console.error('[/api/airports/suggest] Error:', err);
+    res.status(500).json({ ok:false, error:'SUGGEST_FAILED', detail: String(err?.message || err) });
+  }
+});
+
 export default router;
