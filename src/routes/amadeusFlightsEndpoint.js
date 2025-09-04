@@ -1,8 +1,7 @@
 // src/routes/amadeusFlightsEndpoint.js (ESM)
 // Endpoint Express para buscar vuelos reales con Amadeus (TEST o PROD)
-// Proyecto con "type": "module" (ESM).
 // - Intenta DIRECTOS primero (nonStop=true)
-// - Si no hay, permite 1 ESCALA (filtra ofertas con <=1 conexión por trayecto)
+// - Si no hay, permite 1 ESCALA (<=1 conexión por trayecto)
 // - Respuesta simplificada para la UI de Navuara
 
 import express from 'express';
@@ -22,7 +21,7 @@ if (!AMADEUS_KEY || !AMADEUS_SECRET) {
   console.warn('[Amadeus] Faltan AMADEUS_API_KEY / AMADEUS_API_SECRET en variables de entorno.');
 }
 
-// --- CORS básico (para consumir desde Nerd) ---
+// --- CORS básico para este router ---
 router.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -35,7 +34,7 @@ router.use(express.json());
 
 // --- Cache de token ---
 let _token = null;
-let _tokenExp = 0; // epoch ms
+let _tokenExp = 0;
 
 async function getAccessToken() {
   const now = Date.now();
@@ -60,18 +59,14 @@ async function getAccessToken() {
 }
 
 function buildParams({
-  origen,
-  destino,
-  fechaIda,
-  fechaVuelta,
-  adultos = 1,
-  cabina,
-  moneda = 'MXN',
-  nonStop = undefined,
-  max = 20,
+  origen, destino, fechaIda, fechaVuelta,
+  adultos = 1, cabina, moneda = 'MXN',
+  nonStop = undefined, max = 20,
 }) {
   const p = new URLSearchParams();
-  if (!origen || !destino || !fechaIda) throw new Error('Faltan datos: origen, destino y fechaIda son obligatorios');
+  if (!origen || !destino || !fechaIda) {
+    throw new Error('Faltan datos: origen, destino y fechaIda son obligatorios');
+  }
   p.set('originLocationCode', String(origen).toUpperCase());
   p.set('destinationLocationCode', String(destino).toUpperCase());
   p.set('departureDate', fechaIda);
@@ -140,35 +135,40 @@ function mapOffer(offer) {
   };
 }
 
-// Acepta GET y POST para facilitar integración desde Nerd
+// ✅ Acepta GET y POST; lee query params o body (flexible para Nerd)
 router.all('/api/vuelos/buscar', async (req, res) => {
   try {
     const input = { ...(req.query || {}), ...(req.body || {}) };
 
-    // Acepta múltiples nombres de campos
-    const _origen = (input.origen || input.origin || input.from || input.originLocationCode || input.originCode || '').toString().trim().toUpperCase();
+    const _origen  = (input.origen  || input.origin  || input.from  || input.originLocationCode      || input.originCode || '').toString().trim().toUpperCase();
     const _destino = (input.destino || input.destination || input.to || input.destinationLocationCode || input.destinationCode || '').toString().trim().toUpperCase();
-    const _fechaIda = (input.fechaIda || input.departureDate || input.date || input.departure || '').toString().trim();
-    const _fechaVuelta = (input.fechaVuelta || input.returnDate || input.return || '').toString().trim();
+    const _fechaIda    = (input.fechaIda    || input.departureDate || input.date || input.departure || '').toString().trim();
+    const _fechaVuelta = (input.fechaVuelta || input.returnDate    || input.return || '').toString().trim();
     const _adultos = Number(input.adultos || input.adults || input.passengers || 1);
-    const _cabina = (input.cabina || input.travelClass || 'ECONOMY').toString().trim().toUpperCase();
-    const _moneda = (input.moneda || input.currency || 'MXN').toString().trim().toUpperCase();
-    const _max = Number(input.max || 20);
+    const _cabina  = (input.cabina || input.travelClass || 'ECONOMY').toString().trim().toUpperCase();
+    const _moneda  = (input.moneda || input.currency || 'MXN').toString().trim().toUpperCase();
+    const _max     = Number(input.max || 20);
 
     if (!_origen || !_destino || !_fechaIda) {
       return res.status(400).json({ ok:false, error:'Faltan parámetros: origen/destino/fechaIda' });
     }
 
-    // 1) Intento A: directos
-    const paramsDirect = buildParams({ origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined, adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:_max });
+    // 1) Directos
+    const paramsDirect = buildParams({
+      origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
+      adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:_max
+    });
     let offers = await searchOffers(paramsDirect);
 
     let message;
     if (offers.length > 0) {
       message = 'Directos encontrados';
     } else {
-      // 2) Intento B: permitir escalas → quedarnos con <=1
-      const paramsAny = buildParams({ origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined, adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:false, max:50 });
+      // 2) Con escalas (máx. 1)
+      const paramsAny = buildParams({
+        origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
+        adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:false, max:50
+      });
       const offersAny = await searchOffers(paramsAny);
       offers = offersAny.filter(hasAtMostOneConnection);
       message = offers.length > 0 ? 'No hay directos, mostrando 1 escala' : 'Sin resultados';
@@ -184,86 +184,11 @@ router.all('/api/vuelos/buscar', async (req, res) => {
       return da.localeCompare(db);
     });
 
-    const payload = {
+    res.status(200).json({
       ok: true,
       message,
       ofertas: offers.map(mapOffer).slice(0, Number(_max) || 20),
-    };
-
-    res.status(200).json(payload);
-  } catch (err) {
-    console.error('[/api/vuelos/buscar] Error:', err);
-    res.status(500).json({ error: 'SEARCH_FAILED', detail: String(err?.message || err) });
-  }
-});
-    }
-
-    // 1) Intento A: directos
-    const paramsDirect = buildParams({ origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined, adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:_max });
-    let offers = await searchOffers(paramsDirect);
-
-    let message;
-    if (offers.length > 0) {
-      message = 'Directos encontrados';
-    } else {
-      // 2) Intento B: permitir escalas → quedarnos con <=1
-      const paramsAny = buildParams({ origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined, adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:false, max:50 });
-      const offersAny = await searchOffers(paramsAny);
-      offers = offersAny.filter(hasAtMostOneConnection);
-      message = offers.length > 0 ? 'No hay directos, mostrando 1 escala' : 'Sin resultados';
-    }
-
-    // Orden: precio asc; empate por duración de ida
-    offers.sort((a, b) => {
-      const pa = Number(a?.price?.grandTotal || Infinity);
-      const pb = Number(b?.price?.grandTotal || Infinity);
-      if (pa !== pb) return pa - pb;
-      const da = a?.itineraries?.[0]?.duration || '';
-      const db = b?.itineraries?.[0]?.duration || '';
-      return da.localeCompare(db);
     });
-
-    const payload = {
-      ok: true,
-      message,
-      ofertas: offers.map(mapOffer).slice(0, Number(_max) || 20),
-    };
-
-    res.status(200).json(payload);
-  } catch (err) {
-    console.error('[/api/vuelos/buscar] Error:', err);
-    res.status(500).json({ error: 'SEARCH_FAILED', detail: String(err?.message || err) });
-  }
-});
-    let offers = await searchOffers(paramsDirect);
-
-    let message;
-    if (offers.length > 0) {
-      message = 'Directos encontrados';
-    } else {
-      // 2) Intento B: permitir escalas → quedarnos con <=1
-      const paramsAny = buildParams({ origen, destino, fechaIda, fechaVuelta, adultos, cabina, moneda, nonStop: false, max: 50 });
-      const offersAny = await searchOffers(paramsAny);
-      offers = offersAny.filter(hasAtMostOneConnection);
-      message = offers.length > 0 ? 'No hay directos, mostrando 1 escala' : 'Sin resultados';
-    }
-
-    // Orden: precio asc; empate por duración de ida
-    offers.sort((a, b) => {
-      const pa = Number(a?.price?.grandTotal || Infinity);
-      const pb = Number(b?.price?.grandTotal || Infinity);
-      if (pa !== pb) return pa - pb;
-      const da = a?.itineraries?.[0]?.duration || '';
-      const db = b?.itineraries?.[0]?.duration || '';
-      return da.localeCompare(db);
-    });
-
-    const payload = {
-      message,
-      ofertas: offers.map(mapOffer).slice(0, Number(max) || 20),
-    };
-
-    res.status(200).json(payload);
   } catch (err) {
     console.error('[/api/vuelos/buscar] Error:', err);
     res.status(500).json({ error: 'SEARCH_FAILED', detail: String(err?.message || err) });
@@ -271,19 +196,3 @@ router.all('/api/vuelos/buscar', async (req, res) => {
 });
 
 export default router;
-
-/*
-⚙️ Cómo usar en tu app Express existente (ESM):
-
-// src/server.js
-import express from 'express';
-import vuelosRouter from './routes/amadeusFlightsEndpoint.js';
-
-const app = express();
-// ...tu configuración actual (cors, helmet, etc.)
-app.use(vuelosRouter);
-
-app.listen(process.env.PORT || 3000, () => {
-  console.log('Navuara API lista');
-});
-*/
