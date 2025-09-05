@@ -13,6 +13,32 @@ const __dirname  = path.dirname(__filename);
 import express from 'express';
 import fetch from 'node-fetch';
 
+// --- Fallback local: carga única del JSON mundial ---
+let LOCAL_AIRPORTS = null;
+function loadLocalAirports() {
+  if (LOCAL_AIRPORTS) return LOCAL_AIRPORTS;
+  try {
+    const p = path.join(__dirname, '..', 'data', 'airports.json'); // src/data/airports.json
+    LOCAL_AIRPORTS = JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch {
+    LOCAL_AIRPORTS = [];
+  }
+  return LOCAL_AIRPORTS;
+}
+
+const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+
+// Países ES/EN → código ISO (puedes ampliar cuando quieras)
+const COUNTRY_MAP = {
+  // Europa
+  'polonia':'PL','poland':'PL','suiza':'CH','switzerland':'CH','alemania':'DE','germany':'DE',
+  'francia':'FR','france':'FR','italia':'IT','italy':'IT','espana':'ES','españa':'ES','spain':'ES',
+  'paises bajos':'NL','netherlands':'NL','reino unido':'GB','uk':'GB','united kingdom':'GB',
+  // África
+  'marruecos':'MA','morocco':'MA','egipto':'EG','egypt':'EG','sudafrica':'ZA','sudáfrica':'ZA','south africa':'ZA',
+  'kenia':'KE','kenya':'KE','nigeria':'NG','ghana':'GH','etiopia':'ET','ethiopia':'ET','tunez':'TN','túnez':'TN','tunisia':'TN'
+};
+
 const router = express.Router();
 
 // --- Config ---
