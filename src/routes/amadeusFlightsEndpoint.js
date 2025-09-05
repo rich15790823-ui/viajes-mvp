@@ -227,15 +227,85 @@ router.all('/api/vuelos/buscar', async (req, res) => {
   }
 });
 
-// Autocomplete de aeropuertos/ciudades desde Amadeus (ampliado + países ES/EN + fallback)
+// Autocomplete mundial: Amadeus + fallback local (airports.json)
 router.get('/api/airports/suggest', async (req, res) => {
   try {
-    const qRaw = (req.query.q || '').toString().trim();
-    const q = qRaw.replace(/\s+/g, ' ');
+    const qRaw  = (req.query.q || '').toString().trim();
+    const q     = qRaw.replace(/\s+/g, ' ');
     const limit = Math.min(20, parseInt(req.query.limit || '8', 10) || 8);
-    if (q.length < 2) return res.json({ ok: true, results: [] });
+    if (q.length < 2) return res.json({ ok:true, results: [] });
 
-    const token = await getAccessToken();
+    const qLower    = q.toLowerCase();
+    const qNorm     = norm(q);
+    const iataGuess = (q.length === 3 && /^[A-Za-z]{3}$/.test(q)) ? q.toUpperCase() : null;
+    const countryCode = COUNTRY_MAP[qNorm] || null;
+
+    // 1) Amadeus (dos fuentes)
+    const token   = await getAccessToken();
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const p1 = new URLSearchParams({
+      keyword:q, subType:'CITY,AIRPORT', 'page[limit]': String(limit), view:'FULL',
+      ...(countryCode ? { countryCode } : {})
+    });
+    const r1 = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations?${p1}`, { headers });
+    const j1 = r1.ok ? await r1.json() : { data: [] };
+
+    const p2 = new URLSearchParams({
+      keyword:q, 'page[limit]': String(limit),
+      ...(countryCode ? { countryCode } : {})
+    });
+    const r2 = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations/airports?${p2}`, { headers });
+    const j2 = r2.ok ? await r2.json() : { data: [] };
+
+    const normRec = d => ({ iata:d.iataCode, city:d.address?.cityName || d.name || '', name:d.name || '' });
+
+    const byIata = new Map();
+    for (const d of (j1.data || [])) if (d?.iataCode) byIata.set(d.iataCode, normRec(d));
+    for (const d of (j2.data || [])) if (d?.iataCode) byIata.set(d.iataCode, normRec(d));
+
+    // 2) Fallback local si falta cubrir
+    if (byIata.size < limit) {
+      const all = loadLocalAirports();
+      const matches = all.filter(a => {
+        const cityN = norm(a.city);
+        const nameN = norm(a.name);
+        const byIataMatch = a.iata.toLowerCase().startsWith(qLower);
+        const byCityName  = cityN.includes(qNorm) || nameN.includes(qNorm);
+        const byCountry   = countryCode ? a.country === countryCode : false;
+        return byIataMatch || byCityName || byCountry;
+      });
+      for (const a of matches) if (!byIata.has(a.iata)) {
+        byIata.set(a.iata, { iata:a.iata, city:a.city, name:a.name });
+      }
+    }
+
+    let results = Array.from(byIata.values());
+
+    // Orden: IATA exacto > prefijo ciudad/nombre > alfabético
+    results.sort((a,b)=>{
+      const aExact = iataGuess && a.iata === iataGuess;
+      const bExact = iataGuess && b.iata === iataGuess;
+      if (aExact !== bExact) return aExact ? -1 : 1;
+
+      const aHit = a.city.toLowerCase().startsWith(qLower) || a.name.toLowerCase().startsWith(qLower);
+      const bHit = b.city.toLowerCase().startsWith(qLower) || b.name.toLowerCase().startsWith(qLower);
+      if (aHit !== bHit) return aHit ? -1 : 1;
+
+      return (a.city || a.name || a.iata).localeCompare(b.city || b.name || b.iata);
+    });
+
+    // Bonus: si escribió IATA exacto y no está, muéstralo arriba
+    if (iataGuess && !results.find(r => r.iata === iataGuess)) {
+      results.unshift({ iata:iataGuess, city:iataGuess, name:'Typed code' });
+    }
+
+    res.json({ ok:true, results: results.slice(0, limit) });
+  } catch (err) {
+    console.error('[/api/airports/suggest] Error:', err);
+    res.status(500).json({ ok:false, error:'SUGGEST_FAILED', detail: String(err?.message || err) });
+  }
+});
 
     // Normalizador básico (sin acentos, minúsculas)
     const normalize = (s) =>
