@@ -226,6 +226,43 @@ function loadLocalAirports() {
 
 const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
+// Alias de ciudades ES → EN (puedes ampliarlo cuando quieras)
+const CITY_ALIASES = {
+  // muy comunes
+  'nueva york': 'new york',
+  'ciudad de mexico': 'mexico city',
+  'paris': 'paris', 'parís': 'paris',
+  'londres': 'london',
+  'roma': 'rome',
+  'madrid': 'madrid',
+  'barcelona': 'barcelona',
+  'lisboa': 'lisbon',
+  'atenas': 'athens',
+  'moscu': 'moscow', 'moscú': 'moscow',
+  'munich': 'munich', 'múnich': 'munich', 'munchen': 'munich', 'múnich': 'munich',
+  'praga': 'prague',
+  'varsovia': 'warsaw',
+  'cracovia': 'krakow',
+  'colonia': 'cologne',
+  'bruselas': 'brussels',
+  'estocolmo': 'stockholm',
+  'copenhague': 'copenhagen',
+  'florencia': 'florence',
+  'genova': 'genoa', 'génova': 'genoa',
+  'milan': 'milan', 'milán': 'milan',
+  'venecia': 'venice',
+  'napoles': 'naples', 'nápoles': 'naples',
+  'turin': 'turin', 'turín': 'turin',
+  'sevilla': 'seville',
+  'estambul': 'istanbul',
+  'pekin': 'beijing', 'pekín': 'beijing',
+  'shanghai': 'shanghai', 'shanghái': 'shanghai',
+  'cantón': 'guangzhou', 'canton': 'guangzhou',
+  'el cairo': 'cairo', 'cairo': 'cairo',
+  'ciudad del cabo': 'cape town',
+  'marrakech': 'marrakesh', 'marrakesh': 'marrakesh'
+};
+
 const COUNTRY_MAP = {
   // Europa
   'polonia':'PL','poland':'PL','suiza':'CH','switzerland':'CH','alemania':'DE','germany':'DE',
