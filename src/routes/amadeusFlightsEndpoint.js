@@ -52,6 +52,32 @@ function loadLocalAirports() {
 
 // Alias de ciudades ES → EN (amplía cuando quieras)
 const CITY_ALIASES = {
+
+  let ES_ALIASES = null;
+function loadEsAliases() {
+  if (ES_ALIASES) return ES_ALIASES;
+  try {
+    const p = path.join(__dirname, '..', 'data', 'es_aliases.json');
+    ES_ALIASES = JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch { ES_ALIASES = {}; }
+  return ES_ALIASES;
+}
+// Alias ES→EN (merge estático + JSON externo)
+const ALIASES = { ...CITY_ALIASES, ...loadEsAliases() };
+
+const qNormBase = norm(qBase);
+let qEff = qBase;
+for (const [esRaw, en] of Object.entries(ALIASES)) {
+  const es = norm(esRaw);               // clave normalizada (sin acentos)
+  if (qNormBase === es) { qEff = en; break; }
+  if (qNormBase.includes(es)) {
+    // reemplazo parcial (solo letras/espacios) para evitar falsos positivos
+    const re = new RegExp(`\\b${es.replace(/\s+/g,'\\s+')}\\b`, 'i');
+    qEff = qEff.replace(re, en);
+  }
+}
+
+
   'nueva york':'new york',
   'ciudad de mexico':'mexico city',
   'paris':'paris','parís':'paris',
