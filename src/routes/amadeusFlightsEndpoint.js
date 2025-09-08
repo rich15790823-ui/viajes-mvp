@@ -1,8 +1,5 @@
 // src/routes/amadeusFlightsEndpoint.js (ESM)
-// Endpoint Express para buscar vuelos reales con Amadeus (TEST o PROD)
-// - Intenta DIRECTOS primero (nonStop=true)
-// - Si no hay, permite 1 ESCALA (<=1 conexión por trayecto)
-// - Respuesta simplificada para la UI de Navuara
+// Backend Navuara: Vuelos reales (Amadeus) + Autocomplete mundial (Amadeus + fallback local)
 
 import fs from 'fs';
 import path from 'path';
@@ -13,47 +10,19 @@ const __dirname  = path.dirname(__filename);
 import express from 'express';
 import fetch from 'node-fetch';
 
-// --- Fallback local: carga única del JSON mundial ---
-let LOCAL_AIRPORTS = null;
-function loadLocalAirports() {
-  if (LOCAL_AIRPORTS) return LOCAL_AIRPORTS;
-  try {
-    const p = path.join(__dirname, '..', 'data', 'airports.json'); // src/data/airports.json
-    LOCAL_AIRPORTS = JSON.parse(fs.readFileSync(p, 'utf-8'));
-  } catch {
-    LOCAL_AIRPORTS = [];
-  }
-  return LOCAL_AIRPORTS;
-}
-
-const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-
-// Países ES/EN → código ISO (puedes ampliar cuando quieras)
-const COUNTRY_MAP = {
-  // Europa
-  'polonia':'PL','poland':'PL','suiza':'CH','switzerland':'CH','alemania':'DE','germany':'DE',
-  'francia':'FR','france':'FR','italia':'IT','italy':'IT','espana':'ES','españa':'ES','spain':'ES',
-  'paises bajos':'NL','netherlands':'NL','reino unido':'GB','uk':'GB','united kingdom':'GB',
-  // África
-  'marruecos':'MA','morocco':'MA','egipto':'EG','egypt':'EG','sudafrica':'ZA','sudáfrica':'ZA','south africa':'ZA',
-  'kenia':'KE','kenya':'KE','nigeria':'NG','ghana':'GH','etiopia':'ET','ethiopia':'ET','tunez':'TN','túnez':'TN','tunisia':'TN'
-};
-
 const router = express.Router();
 
-// --- Config ---
-const AMADEUS_ENV = process.env.AMADEUS_ENV || 'test'; // 'test' | 'production'
-const AMADEUS_BASE = AMADEUS_ENV === 'production'
-  ? 'https://api.amadeus.com'
-  : 'https://test.api.amadeus.com';
-const AMADEUS_KEY = process.env.AMADEUS_API_KEY;
-const AMADEUS_SECRET = process.env.AMADEUS_API_SECRET;
+// ------------------ Config Amadeus ------------------
+const AMADEUS_ENV   = process.env.AMADEUS_ENV || 'test'; // 'test' | 'production'
+const AMADEUS_BASE  = AMADEUS_ENV === 'production' ? 'https://api.amadeus.com' : 'https://test.api.amadeus.com';
+const AMADEUS_KEY   = process.env.AMADEUS_API_KEY;
+const AMADEUS_SECRET= process.env.AMADEUS_API_SECRET;
 
 if (!AMADEUS_KEY || !AMADEUS_SECRET) {
   console.warn('[Amadeus] Faltan AMADEUS_API_KEY / AMADEUS_API_SECRET en variables de entorno.');
 }
 
-// --- CORS básico para este router ---
+// CORS básico dentro del router (además del global en server.js)
 router.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -61,23 +30,20 @@ router.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
-
 router.use(express.json());
 
-// --- Cache de token ---
+// ------------------ Token cache ------------------
 let _token = null;
-let _tokenExp = 0;
+let _tokenExp = 0; // epoch ms
 
 async function getAccessToken() {
   const now = Date.now();
   if (_token && now < _tokenExp - 120000) return _token; // margen 2m
-
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
     client_id: AMADEUS_KEY,
     client_secret: AMADEUS_SECRET,
   });
-
   const resp = await fetch(`${AMADEUS_BASE}/v1/security/oauth2/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -90,15 +56,22 @@ async function getAccessToken() {
   return _token;
 }
 
+// ------------------ Buscar vuelos ------------------
 function buildParams({
-  origen, destino, fechaIda, fechaVuelta,
-  adultos = 1, cabina, moneda = 'MXN',
-  nonStop = undefined, max = 20,
+  origen,
+  destino,
+  fechaIda,
+  fechaVuelta,
+  adultos = 1,
+  cabina,
+  moneda = 'MXN',
+  nonStop = undefined,
+  max = 20,
 }) {
-  const p = new URLSearchParams();
   if (!origen || !destino || !fechaIda) {
     throw new Error('Faltan datos: origen, destino y fechaIda son obligatorios');
   }
+  const p = new URLSearchParams();
   p.set('originLocationCode', String(origen).toUpperCase());
   p.set('destinationLocationCode', String(destino).toUpperCase());
   p.set('departureDate', fechaIda);
@@ -167,36 +140,37 @@ function mapOffer(offer) {
   };
 }
 
-// ✅ Acepta GET y POST; lee query params o body (flexible para Nerd)
+// GET o POST: /api/vuelos/buscar
 router.all('/api/vuelos/buscar', async (req, res) => {
   try {
     const input = { ...(req.query || {}), ...(req.body || {}) };
 
-    const _origen  = (input.origen  || input.origin  || input.from  || input.originLocationCode      || input.originCode || '').toString().trim().toUpperCase();
+    // Campos aceptados (varios alias)
+    const _origen = (input.origen || input.origin || input.from || input.originLocationCode || input.originCode || '').toString().trim().toUpperCase();
     const _destino = (input.destino || input.destination || input.to || input.destinationLocationCode || input.destinationCode || '').toString().trim().toUpperCase();
-    const _fechaIda    = (input.fechaIda    || input.departureDate || input.date || input.departure || '').toString().trim();
-    const _fechaVuelta = (input.fechaVuelta || input.returnDate    || input.return || '').toString().trim();
+    const _fechaIda = (input.fechaIda || input.departureDate || input.date || input.departure || '').toString().trim();
+    const _fechaVuelta = (input.fechaVuelta || input.returnDate || input.return || '').toString().trim();
     const _adultos = Number(input.adultos || input.adults || input.passengers || 1);
-    const _cabina  = (input.cabina || input.travelClass || 'ECONOMY').toString().trim().toUpperCase();
-    const _moneda  = (input.moneda || input.currency || 'MXN').toString().trim().toUpperCase();
-    const _max     = Number(input.max || 20);
+    const _cabina = (input.cabina || input.travelClass || 'ECONOMY').toString().trim().toUpperCase();
+    const _moneda = (input.moneda || input.currency || 'MXN').toString().trim().toUpperCase();
+    const _max = Number(input.max || 20);
 
     if (!_origen || !_destino || !_fechaIda) {
       return res.status(400).json({ ok:false, error:'Faltan parámetros: origen/destino/fechaIda' });
     }
 
-    // 1) Directos
+    // 1) Directos primero
     const paramsDirect = buildParams({
       origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
       adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:_max
     });
     let offers = await searchOffers(paramsDirect);
-
     let message;
+
+    // 2) Si no hay directos, permitir 1 escala
     if (offers.length > 0) {
       message = 'Directos encontrados';
     } else {
-      // 2) Con escalas (máx. 1)
       const paramsAny = buildParams({
         origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
         adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:false, max:50
@@ -206,7 +180,7 @@ router.all('/api/vuelos/buscar', async (req, res) => {
       message = offers.length > 0 ? 'No hay directos, mostrando 1 escala' : 'Sin resultados';
     }
 
-    // Orden: precio asc; empate por duración de ida
+    // Orden por precio asc, desempate por duración de ida
     offers.sort((a, b) => {
       const pa = Number(a?.price?.grandTotal || Infinity);
       const pb = Number(b?.price?.grandTotal || Infinity);
@@ -223,11 +197,35 @@ router.all('/api/vuelos/buscar', async (req, res) => {
     });
   } catch (err) {
     console.error('[/api/vuelos/buscar] Error:', err);
-    res.status(500).json({ error: 'SEARCH_FAILED', detail: String(err?.message || err) });
+    res.status(500).json({ ok:false, error: 'SEARCH_FAILED', detail: String(err?.message || err) });
   }
 });
 
-// Autocomplete mundial: Amadeus + fallback local (airports.json)
+// ------------------ Autocomplete mundial ------------------
+// Fallback local: carga una sola vez el JSON con todos los IATA
+let LOCAL_AIRPORTS = null;
+function loadLocalAirports() {
+  if (LOCAL_AIRPORTS) return LOCAL_AIRPORTS;
+  try {
+    const p = path.join(__dirname, '..', 'data', 'airports.json'); // src/data/airports.json
+    LOCAL_AIRPORTS = JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch {
+    LOCAL_AIRPORTS = [];
+  }
+  return LOCAL_AIRPORTS;
+}
+const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+
+// Países (ES/EN) → ISO (amplía cuando quieras)
+const COUNTRY_MAP = {
+  'polonia':'PL','poland':'PL','suiza':'CH','switzerland':'CH','alemania':'DE','germany':'DE',
+  'francia':'FR','france':'FR','italia':'IT','italy':'IT','espana':'ES','españa':'ES','spain':'ES',
+  'paises bajos':'NL','netherlands':'NL','reino unido':'GB','uk':'GB','united kingdom':'GB',
+  'marruecos':'MA','morocco':'MA','egipto':'EG','egypt':'EG','sudafrica':'ZA','sudáfrica':'ZA','south africa':'ZA',
+  'kenia':'KE','kenya':'KE','nigeria':'NG','ghana':'GH','etiopia':'ET','ethiopia':'ET','tunez':'TN','túnez':'TN','tunisia':'TN'
+};
+
+// GET /api/airports/suggest?q=xxx&limit=8
 router.get('/api/airports/suggest', async (req, res) => {
   try {
     const qRaw  = (req.query.q || '').toString().trim();
@@ -235,10 +233,10 @@ router.get('/api/airports/suggest', async (req, res) => {
     const limit = Math.min(20, parseInt(req.query.limit || '8', 10) || 8);
     if (q.length < 2) return res.json({ ok:true, results: [] });
 
-    const qLower    = q.toLowerCase();
-    const qNorm     = norm(q);
-    const iataGuess = (q.length === 3 && /^[A-Za-z]{3}$/.test(q)) ? q.toUpperCase() : null;
-    const countryCode = COUNTRY_MAP[qNorm] || null;
+    const qLower     = q.toLowerCase();
+    const qNorm      = norm(q);
+    const iataGuess  = (q.length === 3 && /^[A-Za-z]{3}$/.test(q)) ? q.toUpperCase() : null;
+    const countryISO = COUNTRY_MAP[qNorm] || null;
 
     // 1) Amadeus (dos fuentes)
     const token   = await getAccessToken();
@@ -246,231 +244,4 @@ router.get('/api/airports/suggest', async (req, res) => {
 
     const p1 = new URLSearchParams({
       keyword:q, subType:'CITY,AIRPORT', 'page[limit]': String(limit), view:'FULL',
-      ...(countryCode ? { countryCode } : {})
-    });
-    const r1 = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations?${p1}`, { headers });
-    const j1 = r1.ok ? await r1.json() : { data: [] };
-
-    const p2 = new URLSearchParams({
-      keyword:q, 'page[limit]': String(limit),
-      ...(countryCode ? { countryCode } : {})
-    });
-    const r2 = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations/airports?${p2}`, { headers });
-    const j2 = r2.ok ? await r2.json() : { data: [] };
-
-    const normRec = d => ({ iata:d.iataCode, city:d.address?.cityName || d.name || '', name:d.name || '' });
-
-    const byIata = new Map();
-    for (const d of (j1.data || [])) if (d?.iataCode) byIata.set(d.iataCode, normRec(d));
-    for (const d of (j2.data || [])) if (d?.iataCode) byIata.set(d.iataCode, normRec(d));
-
-    // 2) Fallback local si falta cubrir
-    if (byIata.size < limit) {
-      const all = loadLocalAirports();
-      const matches = all.filter(a => {
-        const cityN = norm(a.city);
-        const nameN = norm(a.name);
-        const byIataMatch = a.iata.toLowerCase().startsWith(qLower);
-        const byCityName  = cityN.includes(qNorm) || nameN.includes(qNorm);
-        const byCountry   = countryCode ? a.country === countryCode : false;
-        return byIataMatch || byCityName || byCountry;
-      });
-      for (const a of matches) if (!byIata.has(a.iata)) {
-        byIata.set(a.iata, { iata:a.iata, city:a.city, name:a.name });
-      }
-    }
-
-    let results = Array.from(byIata.values());
-
-    // Orden: IATA exacto > prefijo ciudad/nombre > alfabético
-    results.sort((a,b)=>{
-      const aExact = iataGuess && a.iata === iataGuess;
-      const bExact = iataGuess && b.iata === iataGuess;
-      if (aExact !== bExact) return aExact ? -1 : 1;
-
-      const aHit = a.city.toLowerCase().startsWith(qLower) || a.name.toLowerCase().startsWith(qLower);
-      const bHit = b.city.toLowerCase().startsWith(qLower) || b.name.toLowerCase().startsWith(qLower);
-      if (aHit !== bHit) return aHit ? -1 : 1;
-
-      return (a.city || a.name || a.iata).localeCompare(b.city || b.name || b.iata);
-    });
-
-    // Bonus: si escribió IATA exacto y no está, muéstralo arriba
-    if (iataGuess && !results.find(r => r.iata === iataGuess)) {
-      results.unshift({ iata:iataGuess, city:iataGuess, name:'Typed code' });
-    }
-
-    res.json({ ok:true, results: results.slice(0, limit) });
-  } catch (err) {
-    console.error('[/api/airports/suggest] Error:', err);
-    res.status(500).json({ ok:false, error:'SUGGEST_FAILED', detail: String(err?.message || err) });
-  }
-});
-
-    // Normalizador básico (sin acentos, minúsculas)
-    const normalize = (s) =>
-      (s || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim();
-
-    const qNorm = normalize(q);
-
-    // Mapa ES/EN -> ISO alpha-2 y nombre EN (solo países más pedidos; puedes ampliar)
-    const COUNTRY_MAP = {
-      // Europa
-      'polonia': { code: 'PL', en: 'Poland' },
-      'poland': { code: 'PL', en: 'Poland' },
-      'suiza': { code: 'CH', en: 'Switzerland' },
-      'switzerland': { code: 'CH', en: 'Switzerland' },
-      'alemania': { code: 'DE', en: 'Germany' },
-      'germany': { code: 'DE', en: 'Germany' },
-      'francia': { code: 'FR', en: 'France' },
-      'france': { code: 'FR', en: 'France' },
-      'italia': { code: 'IT', en: 'Italy' },
-      'italy': { code: 'IT', en: 'Italy' },
-      'espana': { code: 'ES', en: 'Spain' },
-      'españa': { code: 'ES', en: 'Spain' },
-      'spain': { code: 'ES', en: 'Spain' },
-      'paises bajos': { code: 'NL', en: 'Netherlands' },
-      'paisesbajos': { code: 'NL', en: 'Netherlands' },
-      'netherlands': { code: 'NL', en: 'Netherlands' },
-      'reino unido': { code: 'GB', en: 'United Kingdom' },
-      'uk': { code: 'GB', en: 'United Kingdom' },
-      'united kingdom': { code: 'GB', en: 'United Kingdom' },
-      'suiza': { code: 'CH', en: 'Switzerland' },
-      // África (ejemplos comunes)
-      'marruecos': { code: 'MA', en: 'Morocco' },
-      'morocco': { code: 'MA', en: 'Morocco' },
-      'egipto': { code: 'EG', en: 'Egypt' },
-      'egypt': { code: 'EG', en: 'Egypt' },
-      'sudafrica': { code: 'ZA', en: 'South Africa' },
-      'sudáfrica': { code: 'ZA', en: 'South Africa' },
-      'south africa': { code: 'ZA', en: 'South Africa' },
-      'kenia': { code: 'KE', en: 'Kenya' },
-      'kenya': { code: 'KE', en: 'Kenya' },
-      'nigeria': { code: 'NG', en: 'Nigeria' },
-      'ghana': { code: 'GH', en: 'Ghana' },
-      'etiopia': { code: 'ET', en: 'Ethiopia' },
-      'ethiopia': { code: 'ET', en: 'Ethiopia' },
-      'tunez': { code: 'TN', en: 'Tunisia' },
-      'túnez': { code: 'TN', en: 'Tunisia' },
-      'tunisia': { code: 'TN', en: 'Tunisia' },
-    };
-
-    // Catálogo curado (fallback) por país
-    const CURATED = {
-      PL: [
-        { iata: 'WAW', city: 'Warsaw', name: 'Chopin' },
-        { iata: 'KRK', city: 'Krakow', name: 'John Paul II' },
-        { iata: 'GDN', city: 'Gdansk', name: 'Lech Wałęsa' },
-        { iata: 'WRO', city: 'Wroclaw', name: 'Copernicus' },
-      ],
-      CH: [
-        { iata: 'ZRH', city: 'Zurich', name: 'Zurich' },
-        { iata: 'GVA', city: 'Geneva', name: 'Geneva' },
-        { iata: 'BSL', city: 'Basel', name: 'EuroAirport' },
-      ],
-      MA: [
-        { iata: 'CMN', city: 'Casablanca', name: 'Mohammed V' },
-        { iata: 'RAK', city: 'Marrakesh', name: 'Menara' },
-        { iata: 'FEZ', city: 'Fes', name: 'Saiss' },
-      ],
-      EG: [
-        { iata: 'CAI', city: 'Cairo', name: 'Cairo Int’l' },
-        { iata: 'HRG', city: 'Hurghada', name: 'Hurghada' },
-        { iata: 'SSH', city: 'Sharm El Sheikh', name: 'Sharm El Sheikh' },
-      ],
-      ZA: [
-        { iata: 'JNB', city: 'Johannesburg', name: 'O. R. Tambo' },
-        { iata: 'CPT', city: 'Cape Town', name: 'Cape Town' },
-        { iata: 'DUR', city: 'Durban', name: 'King Shaka' },
-      ],
-      KE: [
-        { iata: 'NBO', city: 'Nairobi', name: 'Jomo Kenyatta' },
-        { iata: 'MBA', city: 'Mombasa', name: 'Moi' },
-      ],
-    };
-
-    // ¿Se parece a un nombre de país?
-    let country = null;
-    for (const key of Object.keys(COUNTRY_MAP)) {
-      if (qNorm === key || qNorm.includes(key)) {
-        country = COUNTRY_MAP[key];
-        break;
-      }
-    }
-
-    // Llamadas Amadeus
-    const headers = { Authorization: `Bearer ${token}` };
-
-    const normRec = (d) => ({
-      iata: d.iataCode,
-      city: d.address?.cityName || d.name || '',
-      name: d.name || '',
-    });
-
-    const byIata = new Map();
-
-    // 1) CITY + AIRPORT (view=FULL; sin sort sesgado)
-    const p1 = new URLSearchParams({
-      keyword: q,
-      subType: 'CITY,AIRPORT',
-      'page[limit]': String(limit),
-      view: 'FULL',
-      ...(country ? { countryCode: country.code } : {}),
-    });
-    const r1 = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations?${p1}`, { headers });
-    if (r1.ok) {
-      const j1 = await r1.json();
-      for (const d of (j1.data || [])) if (d?.iataCode) byIata.set(d.iataCode, normRec(d));
-    }
-
-    // 2) SOLO AIRPORTS (a veces trae otros matches)
-    const p2 = new URLSearchParams({
-      keyword: q,
-      'page[limit]': String(limit),
-      ...(country ? { countryCode: country.code } : {}),
-    });
-    const r2 = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations/airports?${p2}`, { headers });
-    if (r2.ok) {
-      const j2 = await r2.json();
-      for (const d of (j2.data || [])) if (d?.iataCode) byIata.set(d.iataCode, normRec(d));
-    }
-
-    // 3) Fallback curado si sigue flojo pero detectamos país
-    if (byIata.size < limit && country && CURATED[country.code]) {
-      for (const d of CURATED[country.code]) {
-        if (!byIata.has(d.iata)) byIata.set(d.iata, d);
-      }
-    }
-
-    let results = Array.from(byIata.values());
-
-    // Bonus: si escribió exactamente un IATA (3 letras), muéstralo arriba
-    const iataGuess = (q.length === 3 && /^[A-Za-z]{3}$/.test(q)) ? q.toUpperCase() : null;
-    if (iataGuess && !byIata.has(iataGuess)) {
-      results.unshift({ iata: iataGuess, city: iataGuess, name: 'Typed code' });
-    }
-
-    // Orden: exact IATA > prefijo de ciudad/nombre > alfabético
-    const qLower = q.toLowerCase();
-    results.sort((a, b) => {
-      const aExact = (a.iata || '').toUpperCase() === (iataGuess || '');
-      const bExact = (b.iata || '').toUpperCase() === (iataGuess || '');
-      if (aExact !== bExact) return aExact ? -1 : 1;
-
-      const aHit = (a.city||'').toLowerCase().startsWith(qLower) || (a.name||'').toLowerCase().startsWith(qLower);
-      const bHit = (b.city||'').toLowerCase().startsWith(qLower) || (b.name||'').toLowerCase().startsWith(qLower);
-      if (aHit !== bHit) return aHit ? -1 : 1;
-
-      return (a.city||a.name||a.iata).localeCompare(b.city||b.name||b.iata);
-    });
-
-    res.json({ ok: true, results: results.slice(0, limit) });
-  } catch (err) {
-    console.error('[/api/airports/suggest] Error:', err);
-    res.status(500).json({ ok:false, error:'SUGGEST_FAILED', detail: String(err?.message || err) });
-  }
-});
+     
