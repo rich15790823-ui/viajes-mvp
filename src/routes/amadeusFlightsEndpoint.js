@@ -25,7 +25,7 @@ if (!AMADEUS_KEY || !AMADEUS_SECRET) {
 
 /* --------------------------- CORS (router-scope) -------------------------- */
 router.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*'); // abre para Nerd/preview
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -41,7 +41,6 @@ let LOCAL_AIRPORTS = null;
 function loadLocalAirports() {
   if (LOCAL_AIRPORTS) return LOCAL_AIRPORTS;
   try {
-    // Ruta esperada: src/data/airports.json
     const p = path.join(__dirname, '..', 'data', 'airports.json');
     LOCAL_AIRPORTS = JSON.parse(fs.readFileSync(p, 'utf-8'));
   } catch {
@@ -50,65 +49,12 @@ function loadLocalAirports() {
   return LOCAL_AIRPORTS;
 }
 
-// Alias de ciudades ES → EN (amplía cuando quieras)
+// Alias de ciudades ES → EN (núcleo)
 const CITY_ALIASES = {
-
-  let ES_ALIASES = null;
-function loadEsAliases() {
-  if (ES_ALIASES) return ES_ALIASES;
-  try {
-    const p = path.join(__dirname, '..', 'data', 'es_aliases.json');
-    ES_ALIASES = JSON.parse(fs.readFileSync(p, 'utf-8'));
-  } catch { ES_ALIASES = {}; }
-  return ES_ALIASES;
-}
-// Alias ES→EN (merge estático + JSON externo)
-const ALIASES = { ...CITY_ALIASES, ...loadEsAliases() };
-
-const qNormBase = norm(qBase);
-let qEff = qBase;
-for (const [esRaw, en] of Object.entries(ALIASES)) {
-  const es = norm(esRaw);               // clave normalizada (sin acentos)
-  if (qNormBase === es) { qEff = en; break; }
-  if (qNormBase.includes(es)) {
-    // reemplazo parcial (solo letras/espacios) para evitar falsos positivos
-    const re = new RegExp(`\\b${es.replace(/\s+/g,'\\s+')}\\b`, 'i');
-    qEff = qEff.replace(re, en);
-  }
-}
-
-
   'nueva york':'new york',
   'ciudad de mexico':'mexico city',
-  'paris':'paris','parís':'paris',
-  'londres':'london',
-  'roma':'rome',
-  'madrid':'madrid',
-  'barcelona':'barcelona',
-  'lisboa':'lisbon',
-  'atenas':'athens',
-  'moscu':'moscow','moscú':'moscow',
-  'praga':'prague',
-  'varsovia':'warsaw',
-  'cracovia':'krakow',
-  'colonia':'cologne',
   'bruselas':'brussels',
-  'estocolmo':'stockholm',
-  'copenhague':'copenhagen',
-  'florencia':'florence',
-  'genova':'genoa','génova':'genoa',
-  'milan':'milan','milán':'milan',
-  'venecia':'venice',
-  'napoles':'naples','nápoles':'naples',
-  'turin':'turin','turín':'turin',
-  'sevilla':'seville',
-  'estambul':'istanbul',
-  'pekin':'beijing','pekín':'beijing',
-  'shanghai':'shanghai','shanghái':'shanghai',
-  'canton':'guangzhou','cantón':'guangzhou',
-  'el cairo':'cairo','cairo':'cairo',
-  'ciudad del cabo':'cape town',
-  'marrakech':'marrakesh','marrakesh':'marrakesh',
+  'ginebra':'geneva',
   'zúrich':'zurich','zurich':'zurich'
 };
 
@@ -132,44 +78,30 @@ const COUNTRY_NAME_TO_ISO = {
 function isoFromCountryQuery(qBase) {
   const qNorm = norm(qBase);
   if (COUNTRY_NAME_TO_ISO[qNorm]) return COUNTRY_NAME_TO_ISO[qNorm];
-  if (/^[A-Za-z]{2}$/.test(qBase)) return qBase.toUpperCase(); // CH, BE, NL...
+  if (/^[A-Za-z]{2}$/.test(qBase)) return qBase.toUpperCase();
   return null;
 }
 
-// “Metro areas” (aeropuertos alternos por ciudad)
+// Metro areas
 const METRO_MAP = {
-  // CDMX
   MEX: ['MEX','NLU','TLC'], NLU: ['MEX','NLU','TLC'], TLC: ['MEX','NLU','TLC'],
-  // New York
   JFK: ['JFK','LGA','EWR'], LGA: ['JFK','LGA','EWR'], EWR: ['JFK','LGA','EWR'],
-  // London
   LHR: ['LHR','LGW','STN','LTN','LCY'], LGW: ['LHR','LGW','STN','LTN','LCY'],
   STN: ['LHR','LGW','STN','LTN','LCY'], LTN: ['LHR','LGW','STN','LTN','LCY'], LCY: ['LHR','LGW','STN','LTN','LCY'],
-  // Paris
   CDG: ['CDG','ORY','BVA'], ORY: ['CDG','ORY','BVA'], BVA: ['CDG','ORY','BVA'],
-  // Tokyo
   NRT: ['NRT','HND'], HND: ['NRT','HND'],
-  // Istanbul
   IST: ['IST','SAW'], SAW: ['IST','SAW'],
-  // Beijing
   PEK: ['PEK','PKX'], PKX: ['PEK','PKX'],
-  // Shanghai
   PVG: ['PVG','SHA'], SHA: ['PVG','SHA'],
-  // Rome
   FCO: ['FCO','CIA'], CIA: ['FCO','CIA'],
-  // Milan
   MXP: ['MXP','LIN','BGY'], LIN: ['MXP','LIN','BGY'], BGY: ['MXP','LIN','BGY'],
-  // Dubai
   DXB: ['DXB','DWC'], DWC: ['DXB','DWC'],
-  // São Paulo
   GRU: ['GRU','CGH','VCP'], CGH: ['GRU','CGH','VCP'], VCP: ['GRU','CGH','VCP'],
-  // Moscow
   SVO: ['SVO','DME','VKO'], DME: ['SVO','DME','VKO'], VKO: ['SVO','DME','VKO'],
-  // Dublín
   DUB: ['DUB']
 };
 
-// Alternos por país (destinos comunes)
+// Alternos por país
 const COUNTRY_DEST_MAP = {
   CH: ['ZRH','GVA','BSL'],
   BE: ['BRU','CRL'],
@@ -188,11 +120,9 @@ function cityAirports(iata) {
   const base = all.find(a => a.iata === code);
   if (!base) return [code];
 
-  // 1) Mismos aeropuertos de la ciudad
   const tag = norm(base.city);
   const cityMates = all.filter(a => norm(a.city) === tag).map(a => a.iata);
 
-  // 2) Cluster por país (si procede)
   const country = base.country;
   const countryCluster = COUNTRY_DEST_MAP[country] || [];
 
@@ -243,6 +173,7 @@ function buildFlightParams({
   return p;
 }
 
+// ⬇️ DEVUELVE ofertas + diccionario de aerolíneas
 async function searchOffers(params) {
   const token = await getAccessToken();
   const url = `${AMADEUS_BASE}/v2/shopping/flight-offers?${params.toString()}`;
@@ -251,26 +182,45 @@ async function searchOffers(params) {
     const txt = await r.text().catch(()=> '');
     throw new Error(`Amadeus search error ${r.status}: ${txt}`);
   }
-  const data = await r.json();
-  return data?.data || [];
+  const j = await r.json();
+  return {
+    offers: j?.data || [],
+    carriers: (j?.dictionaries?.carriers) || {}
+  };
 }
 
-function mapOffer(offer) {
+/* ---------------- mapeo con nombre de aerolínea incluido ------------------ */
+function mapOffer(offer, carriersDict) {
   const it0 = offer.itineraries?.[0];
   const it1 = offer.itineraries?.[1];
   const segs0 = it0?.segments || [];
   const segs1 = it1?.segments || [];
 
-  const mapSeg = (s) => ({
-    salida:  { iata:s?.departure?.iataCode, terminal:s?.departure?.terminal || null, at:s?.departure?.at },
-    llegada: { iata:s?.arrival?.iataCode,   terminal:s?.arrival?.terminal   || null, at:s?.arrival?.at   },
-    aerolinea: s?.carrierCode, vuelo: s?.number, duracionSegmento: s?.duration || null
-  });
+  const firstSeg = segs0[0] || null;
+  const firstCode = firstSeg?.carrierCode || null;
+  const firstName = (firstCode && carriersDict[firstCode]) ? carriersDict[firstCode] : (firstCode || 'Unknown');
+
+  const mapSeg = (s) => {
+    const code = s?.carrierCode;
+    const name = code ? (carriersDict[code] || code) : 'Unknown';
+    return {
+      salida:  { iata:s?.departure?.iataCode, terminal:s?.departure?.terminal || null, at:s?.departure?.at },
+      llegada: { iata:s?.arrival?.iataCode,   terminal:s?.arrival?.terminal   || null, at:s?.arrival?.at   },
+      aerolineaCodigo: code || null,
+      aerolineaNombre: name || null,
+      vuelo: s?.number,
+      duracionSegmento: s?.duration || null
+    };
+  };
 
   const escalasIda    = Math.max(0, segs0.length - 1);
   const escalasVuelta = Math.max(0, segs1.length - 1);
 
   return {
+    // 👇 campos “resumen” que puede usar tu UI
+    airlineCode: firstCode,
+    airlineName: firstName,
+
     precioTotal: offer?.price?.grandTotal,
     moneda: offer?.price?.currency || 'MXN',
     duracionIda: it0?.duration || null,
@@ -294,7 +244,7 @@ router.get('/api/airports/local-stats', (req, res) => {
   }
 });
 
-// Autosuggest mundial: país (ES/EN/ISO-2) → JSON local; ciudad/aeropuerto → Amadeus + fallback
+// Autosuggest mundial (con país y alias básicos ES→EN)
 router.get('/api/airports/suggest', async (req, res) => {
   try {
     const qRaw  = (req.query.q || '').toString().trim();
@@ -302,7 +252,7 @@ router.get('/api/airports/suggest', async (req, res) => {
     const limit = Math.min(20, parseInt(req.query.limit || '8', 10) || 8);
     if (qBase.length < 2) return res.json({ ok:true, results: [] });
 
-    // Si es consulta de país, responde directo desde el JSON local
+    // País directo
     const isoCountry = isoFromCountryQuery(qBase);
     if (isoCountry) {
       const all = loadLocalAirports();
@@ -317,14 +267,14 @@ router.get('/api/airports/suggest', async (req, res) => {
       return res.json({ ok:true, results });
     }
 
-    // Alias ES→EN en ciudad
+    // Alias ES→EN básicos
     const qNormBase = norm(qBase);
     let qEff = qBase;
     for (const [es, en] of Object.entries(CITY_ALIASES)) {
       const esNorm = norm(es);
       if (qNormBase === esNorm) { qEff = en; break; }
       if (qNormBase.includes(esNorm)) {
-        const re = new RegExp(es, 'ig');
+        const re = new RegExp(`\\b${es.replace(/\s+/g,'\\s+')}\\b`, 'i');
         qEff = qEff.replace(re, en);
       }
     }
@@ -333,7 +283,7 @@ router.get('/api/airports/suggest', async (req, res) => {
     const qNorm  = norm(qEff);
     const iataGuess = (qEff.length === 3 && /^[A-Za-z]{3}$/.test(qEff)) ? qEff.toUpperCase() : null;
 
-    // 1) Amadeus (dos fuentes)
+    // Amadeus
     const token   = await getAccessToken();
     const headers = { Authorization: `Bearer ${token}` };
 
@@ -351,7 +301,7 @@ router.get('/api/airports/suggest', async (req, res) => {
     for (const d of (j1.data || [])) if (d?.iataCode) byIata.set(d.iataCode, normRec(d));
     for (const d of (j2.data || [])) if (d?.iataCode) byIata.set(d.iataCode, normRec(d));
 
-    // 2) Fallback local si falta
+    // Fallback local
     if (byIata.size < limit) {
       const all = loadLocalAirports();
       const matches = all.filter(a => {
@@ -401,7 +351,6 @@ router.all('/api/vuelos/buscar', async (req, res) => {
     const _moneda = (input.moneda || input.currency || 'MXN').toString().trim().toUpperCase();
     const _max = Number(input.max || 20);
 
-    // Validación mínima
     if (!/^[A-Z]{3}$/.test(_origen) || !/^[A-Z]{3}$/.test(_destino)) {
       return res.status(400).json({ ok:false, error:'IATA inválido' });
     }
@@ -410,49 +359,54 @@ router.all('/api/vuelos/buscar', async (req, res) => {
     }
     const SAFE_MAX = Math.min(Math.max(Number(_max||20), 1), 200);
 
-    // Helpers de filtrado
     const connCount = (it) => Math.max(0, (it?.segments || []).length - 1);
     const maxConnsPerItin = (off) => (off?.itineraries || []).reduce((m,it)=>Math.max(m, connCount(it)), 0);
+
+    // acumulador de nombres de aerolíneas
+    const carriers = {};
+    const mergeCarriers = (obj)=>{ for (const k in obj) carriers[k]=obj[k]; };
+
     async function searchFiltered({ origin, dest, date, retDate, adults, cabin, currency, maxStops = 2, maxResults = 200 }) {
       const p = buildFlightParams({
         origen: origin, destino: dest, fechaIda: date, fechaVuelta: retDate || undefined,
         adultos: adults, cabina: cabin, moneda: currency, max: maxResults
       });
-      const any = await searchOffers(p);
-      return any.filter(off => maxConnsPerItin(off) <= maxStops);
+      const { offers, carriers: c } = await searchOffers(p);
+      mergeCarriers(c||{});
+      const filtered = offers.filter(off => maxConnsPerItin(off) <= maxStops);
+      return filtered;
     }
 
     const DEBUG = { tries: [] };
     let offers = [];
     let message = '';
 
-    // Intento A: directos (nonStop)
+    // A) directos
     try {
       const paramsDirect = buildFlightParams({
         origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
         adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:50
       });
-      DEBUG.tries.push({ kind:'direct-nonStop', origin:_origen, dest:_destino, date:_fechaIda, asked:50 });
-      offers = await searchOffers(paramsDirect);
+      const R = await searchOffers(paramsDirect);
+      mergeCarriers(R.carriers||{});
+      offers = R.offers;
       if (offers.length > 0) message = 'Directos encontrados';
+      DEBUG.tries.push({ kind:'direct-nonStop', origin:_origen, dest:_destino, date:_fechaIda, asked:50, got:offers.length });
     } catch (e) {
       console.warn('[direct-nonStop] falló:', String(e));
     }
 
-    // Intento B: sin nonStop, hasta 2 escalas
+    // B) hasta 2 escalas
     if (offers.length === 0) {
-      DEBUG.tries.push({ kind:'up-to-2-stops', origin:_origen, dest:_destino, date:_fechaIda, asked:200 });
       const any = await searchFiltered({
         origin:_origen, dest:_destino, date:_fechaIda, retDate:_fechaVuelta,
         adults:_adultos, cabin:_cabina, currency:_moneda, maxStops:2, maxResults:Math.max(150, SAFE_MAX)
       });
-      if (any.length > 0) {
-        offers = any;
-        message = 'Mostrando vuelos con escalas (hasta 2)';
-      }
+      if (any.length > 0) { offers = any; message = 'Mostrando vuelos con escalas (hasta 2)'; }
+      DEBUG.tries.push({ kind:'up-to-2-stops', origin:_origen, dest:_destino, date:_fechaIda, asked:200, got:any.length });
     }
 
-    // Intento C: alternos de ciudad/país + fechas cercanas
+    // C) alternos + fechas cercanas
     if (offers.length === 0) {
       const origins = cityAirports(_origen);
       const dests   = cityAirports(_destino);
@@ -469,11 +423,11 @@ router.all('/api/vuelos/buscar', async (req, res) => {
 
         for (const o of origins) {
           for (const de of dests) {
-            DEBUG.tries.push({ kind:'alt-city/±days', origin:o, dest:de, date:dateTry, asked:200 });
             const res = await searchFiltered({
               origin:o, dest:de, date:dateTry, retDate:_fechaVuelta,
               adults:_adultos, cabin:_cabina, currency:_moneda, maxStops:2, maxResults:Math.max(150, SAFE_MAX)
             });
+            DEBUG.tries.push({ kind:'alt-city/±days', origin:o, dest:de, date:dateTry, asked:200, got:res.length });
             if (res.length > 0) { found = { res, o, de, dateTry, off }; break; }
           }
           if (found) break;
@@ -489,12 +443,10 @@ router.all('/api/vuelos/buscar', async (req, res) => {
         }
       }
 
-      if (!found) {
-        message = 'Sin resultados';
-      }
+      if (!found) message = 'Sin resultados';
     }
 
-    // Orden: precio ↑, luego #escalas, luego duración (ida)
+    // Orden final
     offers.sort((a, b) => {
       const pa = Number(a?.price?.grandTotal || Infinity);
       const pb = Number(b?.price?.grandTotal || Infinity);
@@ -507,8 +459,11 @@ router.all('/api/vuelos/buscar', async (req, res) => {
       return da.localeCompare(db);
     });
 
-    const payload = { ok:true, message, ofertas: offers.map(mapOffer).slice(0, SAFE_MAX || 20) };
-    if (String(req.query.debug) === '1') payload.debug = DEBUG;
+    // ⬅️ map con nombres reales
+    const ofertas = offers.map(off => mapOffer(off, carriers)).slice(0, SAFE_MAX || 20);
+
+    const payload = { ok:true, message, ofertas };
+    if (String(req.query.debug) === '1') payload.debug = { carriers, tries: DEBUG.tries };
     return res.status(200).json(payload);
   } catch (err) {
     console.error('[/api/vuelos/buscar] Error:', err);
