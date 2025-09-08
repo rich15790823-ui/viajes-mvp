@@ -369,6 +369,35 @@ const COUNTRY_MAP = {
   'kenia':'KE','kenya':'KE','nigeria':'NG','ghana':'GH','etiopia':'ET','ethiopia':'ET','tunez':'TN','túnez':'TN','tunisia':'TN'
 };
 
+// País por nombre → ISO-2 (ES/EN)
+const COUNTRY_NAME_TO_ISO = {
+  // Europa (ejemplos claves)
+  'switzerland':'CH', 'suiza':'CH',
+  'belgium':'BE', 'belgica':'BE', 'bélgica':'BE',
+  'netherlands':'NL', 'paises bajos':'NL', 'países bajos':'NL', 'holanda':'NL',
+  'germany':'DE', 'alemania':'DE',
+  'france':'FR', 'francia':'FR',
+  'italy':'IT', 'italia':'IT',
+  'spain':'ES', 'españa':'ES', 'espana':'ES',
+  'ireland':'IE', 'irlanda':'IE',
+  'poland':'PL', 'polonia':'PL',
+  // África (ejemplos)
+  'morocco':'MA', 'marruecos':'MA',
+  'egypt':'EG', 'egipto':'EG',
+  'south africa':'ZA', 'sudafrica':'ZA', 'sudáfrica':'ZA',
+  'kenya':'KE', 'kenia':'KE',
+  'nigeria':'NG', 'ghana':'GH',
+};
+
+// Dado el texto del usuario, intenta deducir ISO-2 del país
+function isoFromCountryQuery(qBase) {
+  const qNorm = norm(qBase);
+  if (COUNTRY_NAME_TO_ISO[qNorm]) return COUNTRY_NAME_TO_ISO[qNorm];
+  // Si el usuario escribe "CH" o "ch"
+  if (/^[A-Za-z]{2}$/.test(qBase)) return qBase.toUpperCase();
+  return null;
+}
+
 // Diagnóstico (temporal): ¿cargó el JSON local?
 router.get('/api/airports/local-stats', (req, res) => {
   try {
