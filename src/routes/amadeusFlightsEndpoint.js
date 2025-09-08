@@ -165,26 +165,62 @@ router.all('/api/vuelos/buscar', async (req, res) => {
       return res.status(400).json({ ok:false, error:'Faltan parámetros: origen/destino/fechaIda' });
     }
 
-    // A) directos
-    const paramsDirect = buildFlightParams({
-      origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
-      adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:_max
-    });
-    let offers = await searchOffers(paramsDirect);
+    // A) directos primero
+const paramsDirect = buildFlightParams({
+  origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
+  adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:50
+});
+let offers = await searchOffers(paramsDirect);
 
-    let message;
-    if (offers.length > 0) {
-      message = 'Directos encontrados';
+let message = '';
+if (offers.length > 0) {
+  message = 'Directos encontrados';
+} else {
+  // B) permitir escalas: NO fijes nonStop=false (que venga todo), y pide más resultados
+  const paramsAny = buildFlightParams({
+    origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
+    adultos:_adultos, cabina:_cabina, moneda:_moneda, /* nonStop omitido */ max:200
+  });
+  const offersAny = await searchOffers(paramsAny);
+
+  // helpers para contar escalas por trayecto
+  const connCount = (it) => Math.max(0, (it?.segments || []).length - 1);
+  const maxConnsPerItin = (off) => (off?.itineraries || []).reduce((m,it)=>Math.max(m, connCount(it)), 0);
+
+  // 1 escala
+  let filtered = offersAny.filter(off => maxConnsPerItin(off) <= 1);
+
+  if (filtered.length > 0) {
+    offers = filtered;
+    message = 'No hay directos, mostrando 1 escala';
+  } else {
+    // hasta 2 escalas (mejor eso que nada)
+    filtered = offersAny.filter(off => maxConnsPerItin(off) <= 2);
+    if (filtered.length > 0) {
+      offers = filtered;
+      message = 'Sin directos ni 1 escala; mostrando hasta 2 escalas';
     } else {
-      // B) permitir 1 escala (filtrar <=1 conexión por trayecto)
-      const paramsAny = buildFlightParams({
-        origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
-        adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:false, max:50
-      });
-      const offersAny = await searchOffers(paramsAny);
-      offers = offersAny.filter(hasAtMostOneConnection);
-      message = offers.length > 0 ? 'No hay directos, mostrando 1 escala' : 'Sin resultados';
+      offers = [];
+      message = 'Sin resultados';
     }
+  }
+}
+
+// Orden: precio ↑, luego #escalas, luego duración ida
+offers.sort((a, b) => {
+  const pa = Number(a?.price?.grandTotal || Infinity);
+  const pb = Number(b?.price?.grandTotal || Infinity);
+  if (pa !== pb) return pa - pb;
+
+  const aConns = Math.max(0, (a?.itineraries?.[0]?.segments?.length || 1) - 1);
+  const bConns = Math.max(0, (b?.itineraries?.[0]?.segments?.length || 1) - 1);
+  if (aConns !== bConns) return aConns - bConns;
+
+  const da = a?.itineraries?.[0]?.duration || '';
+  const db = b?.itineraries?.[0]?.duration || '';
+  return da.localeCompare(db);
+});
+
 
     // Orden: precio asc; empate por duración de ida
     offers.sort((a, b) => {
