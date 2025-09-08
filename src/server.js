@@ -9,14 +9,14 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 
-// Rutas de la API (vuelos + autocompletar)
+// Rutas API
 import vuelosRouter from './routes/amadeusFlightsEndpoint.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
 const app = express();
-app.set('trust proxy', 1); // evita warning del rate-limit detrás de proxy
+app.set('trust proxy', 1); // evita warnings de rate-limit detrás de proxy (Render)
 app.disable('x-powered-by');
 
 // Middlewares base
@@ -36,7 +36,7 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// Archivos estáticos (si usas /public)
+// Estáticos (opcional)
 const publicDir = path.join(__dirname, '..', 'public');
 app.use(express.static(publicDir));
 app.get('/', (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
@@ -49,7 +49,7 @@ app.get('/api/version', (req, res) => {
   res.json({ ok: true, version: v });
 });
 
-// Montar API de vuelos/autocompletar
+// API (vuelos + autosuggest)
 app.use(vuelosRouter);
 
 // SPA fallback
