@@ -161,124 +161,107 @@ router.all('/api/vuelos/buscar', async (req, res) => {
     const _moneda = (input.moneda || input.currency || 'MXN').toString().trim().toUpperCase();
     const _max = Number(input.max || 20);
 
-    if (!_origen || !_destino || !_fechaIda) {
-      return res.status(400).json({ ok:false, error:'Faltan parámetros: origen/destino/fechaIda' });
+    // Validación mínima (evita 400 de Amadeus por parámetros malos)
+    if (!/^[A-Z]{3}$/.test(_origen) || !/^[A-Z]{3}$/.test(_destino)) {
+      return res.status(400).json({ ok:false, error:'IATA inválido' });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(_fechaIda)) {
+      return res.status(400).json({ ok:false, error:'Fecha inválida (YYYY-MM-DD)' });
+    }
+    const SAFE_MAX = Math.min(Math.max(Number(_max||20), 1), 200);
+
+    // Helpers
+    const connCount = (it) => Math.max(0, (it?.segments || []).length - 1);
+    const maxConnsPerItin = (off) => (off?.itineraries || []).reduce((m,it)=>Math.max(m, connCount(it)), 0);
+    async function searchFiltered({ origin, dest, date, retDate, adults, cabin, currency, maxStops = 2, maxResults = 200 }) {
+      const p = buildFlightParams({
+        origen: origin, destino: dest, fechaIda: date, fechaVuelta: retDate || undefined,
+        adultos: adults, cabina: cabin, moneda: currency, max: maxResults
+      });
+      const any = await searchOffers(p);
+      return any.filter(off => maxConnsPerItin(off) <= maxStops);
     }
 
-   // Helpers para buscar aeropuertos alternos de la misma ciudad (según airports.json)
-function cityAirports(iata) {
-  const all = loadLocalAirports();
-  const base = all.find(a => a.iata === iata);
-  if (!base) return [iata];
-  const cityTag = norm(base.city);
-  const mates = all.filter(a => norm(a.city) === cityTag).map(a => a.iata);
-  // devuelve únicos, priorizando el original al inicio
-  const set = new Set([iata, ...mates]);
-  return Array.from(set);
-}
+    // 1) Directos primero (rápido)
+    const paramsDirect = buildFlightParams({
+      origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
+      adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:50
+    });
+    let offers = await searchOffers(paramsDirect);
 
-// Helpers de conteo de escalas
-const connCount = (it) => Math.max(0, (it?.segments || []).length - 1);
-const maxConnsPerItin = (off) => (off?.itineraries || []).reduce((m,it)=>Math.max(m, connCount(it)), 0);
+    let message = '';
+    if (offers.length > 0) {
+      message = 'Directos encontrados';
+    } else {
+      // 2) Hasta 2 escalas
+      let filtered = await searchFiltered({
+        origin:_origen, dest:_destino, date:_fechaIda, retDate:_fechaVuelta,
+        adults:_adultos, cabin:_cabina, currency:_moneda, maxStops:2, maxResults:Math.max(150, SAFE_MAX)
+      });
 
-// Ejecuta una búsqueda con filtro de escalas y tamaño 'max'
-async function searchFiltered({ origin, dest, date, retDate, adults, cabin, currency, maxStops = 2, maxResults = 200 }) {
-  const p = buildFlightParams({
-    origen: origin, destino: dest, fechaIda: date, fechaVuelta: retDate || undefined,
-    adultos: adults, cabina: cabin, moneda: currency,
-    // OJO: no fijamos nonStop para que Amadeus devuelva lo que tenga
-    max: maxResults
-  });
-  const any = await searchOffers(p);
-  return any.filter(off => maxConnsPerItin(off) <= maxStops);
-}
+      if (filtered.length > 0) {
+        offers = filtered;
+        message = 'Mostrando vuelos con escalas (hasta 2)';
+      } else {
+        // 3) Alternos de ciudad + fechas ±2 días
+        const origins = cityAirports(_origen);
+        const dests   = cityAirports(_destino);
+        const offsets = [0, -1, 1, -2, 2];
 
-// 1) Intento directo (nonStop) rápido
-const paramsDirect = buildFlightParams({
-  origen:_origen, destino:_destino, fechaIda:_fechaIda, fechaVuelta:_fechaVuelta || undefined,
-  adultos:_adultos, cabina:_cabina, moneda:_moneda, nonStop:true, max:50
-});
-let offers = await searchOffers(paramsDirect);
+        let found = null;
+        for (const off of offsets) {
+          const d = new Date(_fechaIda);
+          d.setDate(d.getDate() + off);
+          const yyyy = d.getUTCFullYear();
+          const mm   = String(d.getUTCMonth()+1).padStart(2,'0');
+          const dd   = String(d.getUTCDate()).padStart(2,'0');
+          const dateTry = `${yyyy}-${mm}-${dd}`;
 
-let message = '';
-let used = { origin:_origen, dest:_destino, date:_fechaIda, variant:'direct' };
-
-if (offers.length > 0) {
-  message = 'Directos encontrados';
-} else {
-  // 2) Permitir hasta 2 escalas en la misma pareja O-D
-  let filtered = await searchFiltered({
-    origin:_origen, dest:_destino, date:_fechaIda, retDate:_fechaVuelta,
-    adults:_adultos, cabin:_cabina, currency:_moneda, maxStops:2, maxResults:200
-  });
-
-  if (filtered.length > 0) {
-    offers = filtered;
-    message = 'Mostrando vuelos con escalas (hasta 2)';
-    used = { origin:_origen, dest:_destino, date:_fechaIda, variant:'same-OD up-to-2-stops' };
-  } else {
-    // 3) Expandir aeropuertos de la MISMA CIUDAD (ej. MEX/NLU/TLC) y fechas ±2 días
-    const origins = cityAirports(_origen);
-    const dests   = cityAirports(_destino);
-    const offsets = [0, -1, 1, -2, 2]; // prioridad fecha exacta, luego ±1, luego ±2
-
-    let found = null;
-    for (const off of offsets) {
-      // calcular fecha YYYY-MM-DD desplazada
-      const d = new Date(_fechaIda);
-      d.setDate(d.getDate() + off);
-      const yyyy = d.getUTCFullYear();
-      const mm   = String(d.getUTCMonth()+1).padStart(2,'0');
-      const dd   = String(d.getUTCDate()).padStart(2,'0');
-      const dateTry = `${yyyy}-${mm}-${dd}`;
-
-      for (const o of origins) {
-        for (const de of dests) {
-          const res = await searchFiltered({
-            origin:o, dest:de, date:dateTry, retDate:_fechaVuelta,
-            adults:_adultos, cabin:_cabina, currency:_moneda, maxStops:2, maxResults:200
-          });
-          if (res.length > 0) {
-            found = { res, o, de, dateTry, off };
+          for (const o of origins) {
+            for (const de of dests) {
+              const res = await searchFiltered({
+                origin:o, dest:de, date:dateTry, retDate:_fechaVuelta,
+                adults:_adultos, cabin:_cabina, currency:_moneda, maxStops:2, maxResults:Math.max(150, SAFE_MAX)
+              });
+              if (res.length > 0) { found = { res, o, de, dateTry, off }; break; }
+            }
+            if (found) break;
+          }
+          if (found) {
+            offers = found.res;
+            message = `Sin directos; mostrando escalas (hasta 2), ${ (found.o!==_origen||found.de!==_destino) ? `aeropuertos alternos (${found.o}→${found.de})` : 'misma pareja' }${ found.off===0 ? '' : `, fecha cercana (${found.dateTry})` }`;
             break;
           }
         }
-        if (found) break;
-      }
-      if (found) {
-        offers = found.res;
-        const dateMsg = (found.off === 0) ? 'misma fecha' : `fecha cercana (${found.dateTry})`;
-        const odMsg = (found.o!==_origen || found.de!==_destino)
-          ? `aeropuertos alternos de ciudad (${found.o}→${found.de})`
-          : 'misma pareja';
-        message = `Sin directos; mostrando escalas (hasta 2), ${odMsg}, ${dateMsg}`;
-        used = { origin:found.o, dest:found.de, date:found.dateTry, variant:'city-alternates ±2d' };
-        break;
+
+        if (!found) {
+          offers = [];
+          message = 'Sin resultados';
+        }
       }
     }
 
-    if (!found) {
-      offers = [];
-      message = 'Sin resultados';
-      used = { origin:_origen, dest:_destino, date:_fechaIda, variant:'no-results' };
-    }
+    // Orden: precio ↑, luego #escalas, luego duración ida
+    offers.sort((a, b) => {
+      const pa = Number(a?.price?.grandTotal || Infinity);
+      const pb = Number(b?.price?.grandTotal || Infinity);
+      if (pa !== pb) return pa - pb;
+      const aConns = Math.max(0, (a?.itineraries?.[0]?.segments?.length || 1) - 1);
+      const bConns = Math.max(0, (b?.itineraries?.[0]?.segments?.length || 1) - 1);
+      if (aConns !== bConns) return aConns - bConns;
+      const da = a?.itineraries?.[0]?.duration || '';
+      const db = b?.itineraries?.[0]?.duration || '';
+      return da.localeCompare(db);
+    });
+
+    const payload = { ok:true, message, ofertas: offers.map(mapOffer).slice(0, SAFE_MAX || 20) };
+    return res.status(200).json(payload);
+  } catch (err) {
+    console.error('[/api/vuelos/buscar] Error:', err);
+    return res.status(500).json({ error:'SEARCH_FAILED', detail:String(err?.message || err) });
   }
-}
-
-// Orden: precio ↑, luego #escalas, luego duración ida
-offers.sort((a, b) => {
-  const pa = Number(a?.price?.grandTotal || Infinity);
-  const pb = Number(b?.price?.grandTotal || Infinity);
-  if (pa !== pb) return pa - pb;
-
-  const aConns = Math.max(0, (a?.itineraries?.[0]?.segments?.length || 1) - 1);
-  const bConns = Math.max(0, (b?.itineraries?.[0]?.segments?.length || 1) - 1);
-  if (aConns !== bConns) return aConns - bConns;
-
-  const da = a?.itineraries?.[0]?.duration || '';
-  const db = b?.itineraries?.[0]?.duration || '';
-  return da.localeCompare(db);
 });
+
 
 // (Opcional) puedes incluir en la respuesta info de depuración si te sirve:
 // res.set('X-Search-Used', JSON.stringify(used));
