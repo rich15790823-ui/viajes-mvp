@@ -56,12 +56,12 @@ async function getAccessToken() {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
   });
-  if (!resp.ok) throw new Error(`Amadeus token error ${resp.status}`);
-  const data = await resp.json();
-  _token = data.access_token;
-  _tokenExp = Date.now() + (data.expires_in || 1799) * 1000; // ~30m
-  return _token;
+  if (!r.ok) {
+  const txt = await r.text().catch(()=> '');
+  // Ej: {"errors":[{"title":"DATE_OUT_OF_RANGE", "detail":"..."}]}
+  throw new Error(`Amadeus search error ${r.status}: ${txt}`);
 }
+
 
 // -------------------------
 // Búsqueda de vuelos reales
