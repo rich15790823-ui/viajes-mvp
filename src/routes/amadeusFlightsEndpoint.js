@@ -486,4 +486,20 @@ router.get('/api/airports/suggest', async (req, res) => {
   }
 });
 
+// Si el usuario pidió un país (por nombre o ISO-2), responde directo desde el JSON local
+const isoCountry = isoFromCountryQuery(qBase);
+if (isoCountry) {
+  const all = loadLocalAirports();
+  // Heurística: prioriza aeropuertos con "International" en el nombre, luego alfabético por ciudad
+  const inCountry = all.filter(a => a.country === isoCountry);
+  inCountry.sort((a,b) => {
+    const ai = /international/i.test(a.name) ? 0 : 1;
+    const bi = /international/i.test(b.name) ? 0 : 1;
+    if (ai !== bi) return ai - bi;
+    return (a.city || a.name).localeCompare(b.city || b.name);
+  });
+  const results = inCountry.slice(0, Math.max(10, limit)).map(({ iata, city, name }) => ({ iata, city, name }));
+  return res.json({ ok:true, results });
+}
+
 export default router;
