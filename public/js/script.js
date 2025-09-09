@@ -1,3 +1,8 @@
+// public/script.js (arriba del todo)
+import "./js/adapter.flights.js";
+// Si prefieres import con nombre:
+// import { renderOffers } from "./js/adapter.flights.js";
+
 import { setupAutocomplete } from "./autocomplete.js";
 
 // load adapter
@@ -136,6 +141,11 @@ function setFlights(results){
   });
 }
 
+// después de obtener `offers` (array de ofertas Amadeus)
+window.renderOffers("#results", offers);
+// o si importaste con nombre:
+// renderOffers("#results", offers);
+
 function filterByAirline(code){
   const container = document.getElementById('flights') || document.querySelector('.flights') || document.body;
   container.innerHTML = "";
@@ -143,3 +153,4 @@ function filterByAirline(code){
     // reusa tu render de card aquí
   });
 }
+
