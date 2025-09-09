@@ -1,84 +1,90 @@
 // public/js/adapter.flights.js
 import { extractCarrierCode, airlineLogoHTML } from "./airlines.js";
 
-function toDate(x){ try{return new Date(x);}catch{return null;} }
-function fmtTime(iso){ const d=toDate(iso); return (!d||isNaN(d))?"--:--":d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
-function fmtDate(iso){ const d=toDate(iso); return (!d||isNaN(d))?"":d.toLocaleDateString([], {day:"2-digit",month:"short"}); }
-function diffMinutes(a,b){ const A=toDate(a), B=toDate(b); if(!A||!B) return 0; return Math.max(0, Math.round((B-A)/60000)); }
-function fmtHM(m){ const h=Math.floor(m/60), mm=m%60; return `${h}h ${mm}m`; }
-function parseISODurToMin(s){ const m = typeof s==="string" && s.match(/PT(?:(\d+)H)?(?:(\d+)M)?/i); if(!m) return null; return (parseInt(m[1]||"0")*60)+(parseInt(m[2]||"0")); }
+// ------- Utils tiempo/formatos -------
+const toDate = (x) => { try { return new Date(x); } catch { return null; } };
+const fmtTime = (iso) => { const d=toDate(iso); return (!d||isNaN(d))?"--:--":d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); };
+const fmtDate = (iso) => { const d=toDate(iso); return (!d||isNaN(d))?"":d.toLocaleDateString([], {day:"2-digit",month:"short"}); };
+const diffMinutes = (a,b) => { const A=toDate(a), B=toDate(b); if(!A||!B) return 0; return Math.max(0, Math.round((B-A)/60000)); };
+const fmtHM = (m) => `${Math.floor(m/60)}h ${m%60}m`;
+const parseISODurToMin = (s) => { const m = typeof s==="string" && s.match(/PT(?:(\d+)H)?(?:(\d+)M)?/i); if(!m) return null; return (parseInt(m[1]||"0")*60)+(parseInt(m[2]||"0")); };
 
-function computeLayovers(segs){
-  const out=[]; for(let i=0;i<(segs?.length||0)-1;i++){ const cur=segs[i], nxt=segs[i+1];
-    out.push({ from:cur?.arrival?.iataCode, to:nxt?.departure?.iataCode, arrival:cur?.arrival?.at, departureNext:nxt?.departure?.at, minutes:diffMinutes(cur?.arrival?.at, nxt?.departure?.at) });
+// ------- Layovers -------
+function computeLayovers(segs=[]) {
+  const out=[]; for (let i=0;i<segs.length-1;i++){
+    const cur=segs[i], nxt=segs[i+1];
+    out.push({ from:cur?.arrival?.iataCode, to:nxt?.departure?.iataCode,
+      arrival:cur?.arrival?.at, departureNext:nxt?.departure?.at,
+      minutes:diffMinutes(cur?.arrival?.at, nxt?.departure?.at) });
   } return out;
 }
 
-function pickAirlineName(offer, code){
-  return offer?.airlineName || offer?.carrierName || offer?.itineraries?.[0]?.segments?.[0]?.carrierName || (code?`Aerolínea ${code}`:"Aerolínea");
-}
-function flightNumber(seg){ const c = seg?.carrierCode || seg?.marketingCarrierCode || ""; const n = seg?.number || ""; return c&&n?`${c}${n}`:(n||c||""); }
-
-function fmtPrice(offer){
+// ------- Ayudas -------
+const flightNumber = (s) => { const c=s?.carrierCode||s?.marketingCarrierCode||""; const n=s?.number||""; return c&&n?`${c}${n}`:(n||c||""); };
+const fmtPrice = (offer) => {
   const amt = offer?.price?.grandTotal ?? offer?.price?.total;
   const cur = offer?.price?.currency || offer?.price?.currencyCode || "USD";
-  if (!amt) return ""; try { return new Intl.NumberFormat("es-MX",{style:"currency",currency:cur}).format(Number(amt)); } catch { return `${amt} ${cur}`; }
-}
+  if (!amt) return "";
+  try { return new Intl.NumberFormat("es-MX",{style:"currency",currency:cur}).format(Number(amt)); }
+  catch { return `${amt} ${cur}`; }
+};
+const pickAirlineName = (offer, code) =>
+  offer?.airlineName || offer?.carrierName || offer?.itineraries?.[0]?.segments?.[0]?.carrierName || (code?`Aerolínea ${code}`:"Aerolínea");
 
+// ------- Render -------
 function renderSegmentRow(seg){
-  const dep = seg?.departure?.iataCode || "—";
-  const arr = seg?.arrival?.iataCode || "—";
-  const depT = fmtTime(seg?.departure?.at);
-  const arrT = fmtTime(seg?.arrival?.at);
-  const fn = flightNumber(seg);
   return `
     <div class="seg-row">
-      <div class="seg-codes"><span class="seg-iata">${dep}</span><span class="seg-arrow">→</span><span class="seg-iata">${arr}</span></div>
-      <div class="seg-times"><span>${depT}</span><span class="seg-dash">–</span><span>${arrT}</span></div>
-      <div class="seg-meta">${fn ? `Vuelo ${fn}` : ""}</div>
-    </div>
-  `;
+      <div class="seg-codes"><span class="seg-iata">${seg?.departure?.iataCode||"—"}</span><span class="seg-arrow">→</span><span class="seg-iata">${seg?.arrival?.iataCode||"—"}</span></div>
+      <div class="seg-times"><span>${fmtTime(seg?.departure?.at)}</span><span class="seg-dash">–</span><span>${fmtTime(seg?.arrival?.at)}</span></div>
+      <div class="seg-meta">${flightNumber(seg) ? `Vuelo ${flightNumber(seg)}` : ""}</div>
+    </div>`;
 }
+
 function renderLayovers(segs){
-  const lays = computeLayovers(segs||[]);
+  const lays = computeLayovers(segs);
   if(!lays.length) return "";
   return `<div class="lay-list">${
     lays.map(x=>`
       <div class="lay-item">
-        <div><div class="lay-title">Escala en ${x.from}</div><div class="lay-time">${fmtTime(x.arrival)} → ${fmtTime(x.departureNext)}</div></div>
+        <div>
+          <div class="lay-title">Escala en ${x.from}</div>
+          <div class="lay-time">${fmtTime(x.arrival)} → ${fmtTime(x.departureNext)}</div>
+        </div>
         <div class="lay-dur">${fmtHM(x.minutes)}</div>
       </div>`).join("")
   }</div>`;
 }
+
 function renderItinerary(it, tag){
   if(!it) return "";
   const segs = it.segments || [];
   let tot = it.duration ? parseISODurToMin(it.duration) : null;
   if(tot==null && segs.length) tot = diffMinutes(segs[0]?.departure?.at, segs[segs.length-1]?.arrival?.at);
-  const segsHTML = segs.map(renderSegmentRow).join("");
-  const laysHTML = renderLayovers(segs);
-  const hasLay = (segs?.length||0)>1;
-  const firstDep = segs?.[0]?.departure?.at || "";
   return `
     <section class="itin">
       <div class="itin-header">
         <div class="itin-tag">${tag}</div>
-        <div class="itin-date">${fmtDate(firstDep)} · ${tot!=null?fmtHM(tot):""}</div>
+        <div class="itin-date">${fmtDate(segs?.[0]?.departure?.at || "")} · ${tot!=null?fmtHM(tot):""}</div>
       </div>
-      <div class="itin-segs">${segsHTML || "<div class='seg-empty'>Sin segmentos</div>"}</div>
-      ${hasLay ? `<button type="button" class="lay-toggle">Ver escalas y tiempos</button><div class="lay-container" hidden>${laysHTML}</div>` : ""}
-    </section>
-  `;
+      <div class="itin-segs">${segs.map(renderSegmentRow).join("") || "<div class='seg-empty'>Sin segmentos</div>"}</div>
+      ${
+        (segs.length>1)
+        ? `<button type="button" class="lay-toggle">Ver escalas y tiempos</button><div class="lay-container" hidden>${renderLayovers(segs)}</div>`
+        : ""
+      }
+    </section>`;
 }
 
 function createOfferCard(offer){
   const code = extractCarrierCode(offer);
   const name = pickAirlineName(offer, code);
   const price = fmtPrice(offer);
-  // debug para ver qué trae tu API:
+
+  // debug útil
   console.debug("[NAVUARA][logo]", { code, name, validatingAirlineCodes: offer?.validatingAirlineCodes, seg0: offer?.itineraries?.[0]?.segments?.[0] });
 
-  const ida = offer?.itineraries?.[0] || null;
+  const ida    = offer?.itineraries?.[0] || null;
   const vuelta = offer?.itineraries?.[1] || null;
 
   const card = document.createElement("article");
@@ -120,4 +126,5 @@ export function renderOffers(container, offers){
   root.appendChild(frag);
 }
 
+// también disponible global
 window.renderOffers = renderOffers;
