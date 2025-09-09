@@ -1,3 +1,6 @@
+// 👇 importa el traductor universal (ya existe en public/js/i18n/resolve.js)
+import { resolveQueryUniversal } from "./js/i18n/resolve.js";
+
 const $ = (s)=>document.querySelector(s);
 
 function debounce(fn, ms=250){
