@@ -1,5 +1,5 @@
-// 👇 importa el traductor universal (ya existe en public/js/i18n/resolve.js)
 import { resolveQueryUniversal } from "./js/i18n/resolve.js";
+import { setupAutocomplete } from "./autocomplete.js";
 
 const $ = (s)=>document.querySelector(s);
 
