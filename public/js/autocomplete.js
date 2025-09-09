@@ -1,322 +1,125 @@
-const NV = {
-  debounce(fn, wait=220){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait); }; },
-  fetchPlaces: async (q)=>{ if(!q) return []; const r = await fetch(`/api/places?q=${encodeURIComponent(q)}`); if(!r.ok) return []; return r.json(); },
-  formatItem: (x)=> `${x.code || x.id} — ${x.city || x.name} (${x.country||""})`.trim(),
-  choose(elInput, listEl, item){ elInput.value = item.code || item.id || item.name; listEl.classList.remove("open"); listEl.innerHTML = ""; },
-  bindAutocomplete(elInput, listEl){
-    const onType = NV.debounce(async ()=>{
-      const q = elInput.value.trim();
-      if(!q){ listEl.classList.remove("open"); listEl.innerHTML=""; return; }
-      const items = await NV.fetchPlaces(q);
-      if(!items.length){ listEl.classList.remove("open"); listEl.innerHTML=""; return; }
-      const ul = document.createElement("ul");
-      items.forEach(it=>{
-        const li = document.createElement("li");
-        li.textContent = NV.formatItem(it);
-        li.addEventListener("click", ()=> NV.choose(elInput, listEl, it));
-        ul.appendChild(li);
-      });
-      listEl.innerHTML = ""; listEl.appendChild(ul); listEl.classList.add("open");
+// public/autocomplete.js
+import { resolveQueryUniversal } from "./js/i18n/resolve.js";
+
+/** Utils **/
+const normalize = (s="") => s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu,"").replace(/\s+/g," ").trim();
+const debounce = (fn, ms=200) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
+
+function groupByCity(list){
+  const m = new Map();
+  for (const a of list){
+    const key = `${a.city}|${a.country}`;
+    if(!m.has(key)) m.set(key, { city:a.city, country:a.country, items:[] });
+    m.get(key).items.push(a);
+  }
+  return [...m.values()];
+}
+
+async function fetchAirports(params){
+  // /api/suggest debe existir en tu backend (lo vi en tus commits)
+  const url = `/api/suggest?${params.toString()}`;
+  const r = await fetch(url);
+  if(!r.ok) return [];
+  const data = await r.json();
+  // soporta distintos formatos: {airports:[...]}, {results:[...]}, [...]
+  return data?.airports || data?.results || data || [];
+}
+
+/** Render **/
+function renderSuggestions(panel, groups, onPick){
+  if(!groups.length){
+    panel.innerHTML = `<div class="sugs-empty">Sin coincidencias</div>`;
+    return;
+  }
+
+  const html = groups.map(g=>{
+    const key = `${g.city}|${g.country}`.replace(/"/g,'&quot;');
+    const items = g.items.map(a=>`
+      <li class="sug-air" data-iata="${a.iata}" data-city="${a.city}" data-name="${a.name}" data-country="${a.country}">
+        <span class="iata">${a.iata}</span>
+        <span class="title">${a.name}</span>
+        <span class="meta">${a.city}</span>
+      </li>`).join("");
+
+    return `
+      <li class="sug-city">
+        <button class="sug-toggle" data-key="${key}" type="button">
+          <span class="title">${g.city}, ${g.country}</span>
+          <span class="meta">${g.items.length} aeropuerto${g.items.length>1?"s":""}</span>
+        </button>
+        <ul class="sug-list" data-list="${key}" hidden>
+          ${items}
+        </ul>
+      </li>`;
+  }).join("");
+
+  panel.innerHTML = `<ul class="sugs">${html}</ul>`;
+
+  // expand/collapse por ciudad
+  panel.querySelectorAll(".sug-toggle").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const key = btn.dataset.key;
+      const ul = panel.querySelector(`.sug-list[data-list="${key}"]`);
+      ul.hidden = !ul.hidden;
     });
-    elInput.addEventListener("input", onType);
-    elInput.addEventListener("focus", onType);
-    document.addEventListener("click", (e)=>{ if(!listEl.contains(e.target) && e.target!==elInput){ listEl.classList.remove("open"); } });
-  },
-  parseRoute(raw){ const s=(raw||"").toUpperCase().trim(); const norm=s.replace(/[–—-]+/g," ").replace(/\s+/g," ").trim(); const parts=norm.split(" "); if(parts.length===2) return { from:parts[0], to:parts[1] }; return null; },
-};
+  });
 
-window.addEventListener("DOMContentLoaded", ()=>{
-  const o = document.getElementById("nv-origin");
-  const od = document.getElementById("nv-origin-dd");
-  const d = document.getElementById("nv-dest");
-  const dd = document.getElementById("nv-dest-dd");
-  const r = document.getElementById("nv-route");
-  if(o && od) NV.bindAutocomplete(o, od);
-  if(d && dd) NV.bindAutocomplete(d, dd);
-  if(r){ r.addEventListener("change", ()=>{ const parsed = NV.parseRoute(r.value); if(parsed){ if(o) o.value = parsed.from; if(d) d.value = parsed.to; } }); }
-});
-
-// ===== NAVUARA: adaptador y render sin tocar HTML =====
-;(()=>{
-  const AIRLINES = {
-    "AM":"Aeroméxico","VB":"Viva Aerobus","Y4":"Volaris","IB":"Iberia","UX":"Air Europa","AV":"Avianca",
-    "CM":"Copa Airlines","AA":"American Airlines","DL":"Delta","UA":"United","LH":"Lufthansa",
-    "AF":"Air France","BA":"British Airways"
-  };
-
-  function pick(o, keys, def=null){ for(const k of keys){ if(o && o[k]!=null) return o[k]; } return def; }
-  function toIso(v){ if(!v) return null; if(typeof v==="number"){ const ms=v>1e12?v:v*1000; return new Date(ms).toISOString(); } const d=new Date(v); return isNaN(d.getTime())?null:d.toISOString(); }
-  function tLocal(iso){ if(!iso) return "-"; const d=new Date(iso); return isNaN(d.getTime())?"-":d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}); }
-
-  function normalizeOne(raw){
-    const code = (pick(raw, ["airline","airlineName","carrier","carrierCode","marketingCarrier"], "")||"").toString().toUpperCase();
-    const airlineName = AIRLINES[code] || code || "—";
-    const origin = (pick(raw, ["origin","from","originCode","departureIata","orig"], "")||"").toString().toUpperCase();
-    const destination = (pick(raw, ["destination","to","dest","destinationCode","arrivalIata"], "")||"").toString().toUpperCase();
-    const depISO = toIso(pick(raw, ["departureTime","depart_at","departure","departTime"], null));
-    const arrISO = toIso(pick(raw, ["arrivalTime","arrival","arriveTime","arr_time"], null));
-    const price = pick(raw, ["price","totalPrice","amount","fare","price_mxn"], null);
-    let priceStr = "";
-    if (price && typeof price === "object" && "amount" in price && "currency" in price) {
-      priceStr = `${price.currency} ${price.amount}`;
-    } else if (typeof price === "number") {
-      priceStr = `$ ${price}`;
-    } else if (price) {
-      priceStr = `${price}`;
-    }
-    return {
-      airlineCode: code,
-      airlineName,
-      origin,
-      destination,
-      departureISO: depISO,
-      arrivalISO: arrISO,
-      departureLocal: tLocal(depISO),
-      arrivalLocal: tLocal(arrISO),
-      priceStr,
-      deeplink: pick(raw, ["deeplink","deepLink","url"], null),
-    };
-  }
-
-  function normalizeList(json){
-    let list = Array.isArray(json) ? json
-             : (json?.results && Array.isArray(json.results)) ? json.results
-             : (json?.flights && Array.isArray(json.flights)) ? json.flights
-             : (json?.data?.items && Array.isArray(json.data.items)) ? json.data.items
-             : [];
-    return list.map(normalizeOne).filter(x=>x.airlineCode && x.origin && x.destination);
-  }
-
-  function ensureContainer(){
-    // Busca un contenedor de resultados; si no hay, crea uno fijo.
-    let c = document.getElementById("flights") || document.querySelector(".flights");
-    if (!c) {
-      c = document.createElement("div");
-      c.id = "flights";
-      c.style.maxWidth = "900px";
-      c.style.margin = "20px auto";
-      c.style.display = "grid";
-      c.style.gridTemplateColumns = "repeat(auto-fill, minmax(260px, 1fr))";
-      c.style.gap = "12px";
-      document.body.appendChild(c);
-    }
-    return c;
-  }
-
-  function renderFlights(json){
-    const flights = normalizeList(json);
-    const container = ensureContainer();
-    container.innerHTML = ""; // limpia para nueva búsqueda
-
-    if (!flights.length){
-      const empty = document.createElement("div");
-      empty.textContent = "Sin resultados.";
-      empty.style.opacity = ".7";
-      container.appendChild(empty);
-      return;
-    }
-
-    flights.forEach(f=>{
-      const card = document.createElement("div");
-      card.style.border = "1px solid #eee";
-      card.style.borderRadius = "12px";
-      card.style.padding = "12px";
-      card.style.background = "#fff";
-      card.style.boxShadow = "0 8px 20px rgba(0,0,0,.04)";
-
-      card.innerHTML = `
-        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
-          <div>
-            <div style="font-weight:700">${f.airlineName} <span style="opacity:.6">(${f.airlineCode})</span></div>
-            <div style="opacity:.9">${f.origin} → ${f.destination}</div>
-          </div>
-          <div style="text-align:right">
-            <div>Sale: <strong>${f.departureLocal}</strong></div>
-            <div>Llega: <strong>${f.arrivalLocal || '-'}</strong></div>
-          </div>
-        </div>
-        <div style="margin-top:6px; font-size:14px; opacity:.9">
-          ${f.priceStr ? 'Desde: <strong>'+f.priceStr+'</strong>' : ''}
-        </div>
-      `;
-      if (f.deeplink){
-        const a = document.createElement("a");
-        a.href = f.deeplink;
-        a.textContent = "Ver";
-        a.style.display = "inline-block";
-        a.style.marginTop = "8px";
-        a.style.color = "#2f2c79";
-        a.target = "_blank";
-        card.appendChild(a);
-      }
-      container.appendChild(card);
+  // click en aeropuerto -> onPick
+  panel.querySelectorAll(".sug-air").forEach(li=>{
+    li.addEventListener("click", ()=>{
+      const a = {
+        iata: li.dataset.iata,
+        city: li.dataset.city,
+        name: li.dataset.name,
+        country: li.dataset.country
+      };
+      onPick(a);
     });
-  }
+  });
+}
 
-  // Monkeypatch suave: intercepta fetch y, si parece respuesta de vuelos, pintamos
-  const _fetch = window.fetch;
-  window.fetch = async function(...args){
-    const resp = await _fetch.apply(this, args);
-    try {
-      const clone = resp.clone();
-      const data = await clone.json().catch(()=>null);
-      if (data && (Array.isArray(data) || data.results || data.flights || (data.data && data.data.items))){
-        renderFlights(data);
+/** Main setup **/
+export function setupAutocomplete({ input, panel, side }){
+  const $inp = (typeof input==="string") ? document.querySelector(input) : input;
+  const $panel = (typeof panel==="string") ? document.querySelector(panel) : panel;
+
+  if(!$inp || !$panel) return;
+
+  const doSearch = debounce(async ()=>{
+    const raw = $inp.value;
+    if(!raw.trim()){ $panel.innerHTML = ""; return; }
+
+    // 1) Resolver (traducción ES→EN o país)
+    const rq = await resolveQueryUniversal(raw);
+    if(!rq){ $panel.innerHTML = ""; return; }
+
+    // 2) Llamar a /api/suggest con la clave correcta
+    const params = new URLSearchParams(
+      rq.kind === "country" ? { country: rq.countryEn } : { q: rq.cityEn }
+    );
+
+    const airports = await fetchAirports(params);
+
+    // Espera objetos { iata, city, name, country }
+    const groups = groupByCity(airports);
+    renderSuggestions($panel, groups, (a)=>{
+      // setear input visible y variables globales con el IATA
+      $inp.value = `${a.city} (${a.iata})`;
+      if(side === "from"){
+        window.selectedFromIATA = a.iata;
+      } else {
+        window.selectedToIATA = a.iata;
       }
-    } catch(e){ /* ignorar */ }
-    return resp;
-  };
-
-  // API pública opcional por si quieres llamar manualmente:
-  window.NAVUARA = window.NAVUARA || {};
-  window.NAVUARA.renderFlightsFromApi = renderFlights;
-})();
-
-// ===== NAVUARA: Observador para leer la Depuración de Nerd y renderizar =====
-;(()=>{
-  const AIRLINES = {
-    "AM":"Aeroméxico","VB":"Viva Aerobus","Y4":"Volaris","IB":"Iberia","UX":"Air Europa","AV":"Avianca",
-    "CM":"Copa Airlines","AA":"American Airlines","DL":"Delta","UA":"United","LH":"Lufthansa",
-    "AF":"Air France","BA":"British Airways"
-  };
-
-  function pick(o, keys, def=null){ for(const k of keys){ if(o && o[k]!=null) return o[k]; } return def; }
-  function toIso(v){ if(!v) return null; if(typeof v==="number"){ const ms=v>1e12?v:v*1000; return new Date(ms).toISOString(); } const d=new Date(v); return isNaN(d.getTime())?null:d.toISOString(); }
-  function tLocal(iso){ if(!iso) return "-"; const d=new Date(iso); return isNaN(d.getTime())?"-":d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}); }
-
-  function normalizeOne(raw){
-    const code = (pick(raw, ["airline","airlineName","carrier","carrierCode","marketingCarrier"], "")||"").toString().toUpperCase();
-    const airlineName = AIRLINES[code] || code || "—";
-    const origin = (pick(raw, ["origin","from","originCode","departureIata","orig"], "")||"").toString().toUpperCase();
-    const destination = (pick(raw, ["destination","to","dest","destinationCode","arrivalIata"], "")||"").toString().toUpperCase();
-    const depISO = toIso(pick(raw, ["departureTime","depart_at","departure","departTime"], null));
-    const arrISO = toIso(pick(raw, ["arrivalTime","arrival","arriveTime","arr_time"], null));
-    const price = pick(raw, ["price","totalPrice","amount","fare","price_mxn"], null);
-    let priceStr = "";
-    if (price && typeof price === "object" && "amount" in price && "currency" in price) {
-      priceStr = `${price.currency} ${price.amount}`;
-    } else if (typeof price === "number") {
-      priceStr = `$ ${price}`;
-    } else if (price) {
-      priceStr = `${price}`;
-    }
-    return {
-      airlineCode: code,
-      airlineName,
-      origin,
-      destination,
-      departureISO: depISO,
-      arrivalISO: arrISO,
-      departureLocal: tLocal(depISO),
-      arrivalLocal: tLocal(arrISO),
-      priceStr,
-      deeplink: pick(raw, ["deeplink","deepLink","url"], null),
-    };
-  }
-
-  function normalizeList(json){
-    let list = Array.isArray(json) ? json
-             : (json?.results && Array.isArray(json.results)) ? json.results
-             : (json?.flights && Array.isArray(json.flights)) ? json.flights
-             : (json?.data?.items && Array.isArray(json.data.items)) ? json.data.items
-             : [];
-    return list.map(normalizeOne).filter(x=>x.airlineCode && x.origin && x.destination);
-  }
-
-  function ensureContainer(){
-    let c = document.getElementById("flights") || document.querySelector(".flights");
-    if (!c) {
-      c = document.createElement("div");
-      c.id = "flights";
-      c.style.maxWidth = "900px";
-      c.style.margin = "20px auto";
-      c.style.display = "grid";
-      c.style.gridTemplateColumns = "repeat(auto-fill, minmax(260px, 1fr))";
-      c.style.gap = "12px";
-      document.body.appendChild(c);
-    }
-    return c;
-  }
-
-  function renderFlights(json){
-    const flights = normalizeList(json);
-    const container = ensureContainer();
-    container.innerHTML = "";
-    if (!flights.length){
-      const empty = document.createElement("div");
-      empty.textContent = "Sin resultados.";
-      empty.style.opacity = ".7";
-      container.appendChild(empty);
-      return;
-    }
-    flights.forEach(f=>{
-      const card = document.createElement("div");
-      card.style.border = "1px solid #eee";
-      card.style.borderRadius = "12px";
-      card.style.padding = "12px";
-      card.style.background = "#fff";
-      card.style.boxShadow = "0 8px 20px rgba(0,0,0,.04)";
-      card.innerHTML = `
-        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
-          <div>
-            <div style="font-weight:700">${f.airlineName} <span style="opacity:.6">(${f.airlineCode})</span></div>
-            <div style="opacity:.9">${f.origin} → ${f.destination}</div>
-          </div>
-          <div style="text-align:right">
-            <div>Sale: <strong>${f.departureLocal}</strong></div>
-            <div>Llega: <strong>${f.arrivalLocal || '-'}</strong></div>
-          </div>
-        </div>
-        <div style="margin-top:6px; font-size:14px; opacity:.9">
-          ${f.priceStr ? 'Desde: <strong>'+f.priceStr+'</strong>' : ''}
-        </div>
-      `;
-      if (f.deeplink){
-        const a = document.createElement("a");
-        a.href = f.deeplink;
-        a.textContent = "Ver";
-        a.style.display = "inline-block";
-        a.style.marginTop = "8px";
-        a.style.color = "#2f2c79";
-        a.target = "_blank";
-        card.appendChild(a);
-      }
-      container.appendChild(card);
+      // cerrar panel
+      $panel.innerHTML = "";
     });
-  }
+  }, 220);
 
-  // --- Observa el DOM y cuando aparezca el bloque de depuración, lo parsea ---
-  let lastHash = null;
-  function tryParseDebug(){
-    // Busca nodos con el texto "Depuración (Respuesta Cruda de la API):"
-    const nodes = Array.from(document.querySelectorAll("pre, code, div, p"))
-      .filter(n => n.textContent && n.textContent.includes("Depuración (Respuesta Cruda de la API):"));
-    for (const n of nodes){
-      const txt = n.textContent;
-      const i = txt.indexOf("{");
-      const j = txt.lastIndexOf("}");
-      if (i>=0 && j>i){
-        const jsonStr = txt.slice(i, j+1);
-        // Evita re-render con el mismo contenido
-        const hash = jsonStr.length + ":" + (jsonStr.charCodeAt(0)|0) + ":" + (jsonStr.charCodeAt(jsonStr.length-1)|0);
-        if (hash === lastHash) return;
-        try{
-          const data = JSON.parse(jsonStr);
-          lastHash = hash;
-          renderFlights(data);
-          return;
-        }catch(e){ /* sigue buscando */ }
-      }
+  $inp.addEventListener("input", doSearch);
+  $inp.addEventListener("focus", doSearch);
+  document.addEventListener("click", (e)=>{
+    if(!($panel.contains(e.target) || $inp.contains(e.target))){
+      $panel.innerHTML = "";
     }
-  }
-
-  const obs = new MutationObserver(()=>{ tryParseDebug(); });
-  obs.observe(document.documentElement, { childList:true, subtree:true, characterData:true });
-
-  // Intento inicial por si ya está en la página
-  tryParseDebug();
-
-  // API pública por si quieres forzar render a mano:
-  window.NAVUARA = window.NAVUARA || {};
-  window.NAVUARA.renderFlightsFromApi = renderFlights;
-})();
+  });
+}
