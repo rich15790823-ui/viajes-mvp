@@ -1,3 +1,6 @@
+import { renderOffers as _renderOffers } from "./js/adapter.flights.js";
+window.renderOffers = _renderOffers;
+
 // public/script.js  (reemplaza TODO)
 import { renderOffers as _renderOffers } from "./js/adapter.flights.js";
 
