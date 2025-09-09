@@ -1,6 +1,40 @@
 // public/js/airlines.js
 
-// Saca el carrier IATA (2 letras) desde el offer (Amadeus/compat)
+// 🔎 Mapa por si el offer trae solo el nombre de la aerolínea
+const NAME_TO_CODE = {
+  "IBERIA": "IB",
+  "TURKISH AIRLINES": "TK",
+  "KLM": "KL",
+  "AIR FRANCE": "AF",
+  "AMERICAN AIRLINES": "AA",
+  "UNITED": "UA",
+  "DELTA": "DL",
+  "AEROMEXICO": "AM",
+  "LATAM": "LA",
+  "LUFTHANSA": "LH",
+  "BRITISH AIRWAYS": "BA",
+  "RYANAIR": "FR",
+  "VUELING": "VY",
+  "EASYJET": "U2",
+  "WIZZAIR": "W6",
+  "QATAR AIRWAYS": "QR",
+  "EMIRATES": "EK",
+  "QANTAS": "QF",
+  "COPA AIRLINES": "CM",
+  "AVIANCA": "AV",
+  "JETBLUE": "B6",
+  "SPIRIT": "NK",
+  "ALASKA AIRLINES": "AS",
+  "AIR CANADA": "AC",
+};
+
+export function codeFromName(name) {
+  if (!name) return null;
+  const key = String(name).toUpperCase().trim();
+  return NAME_TO_CODE[key] || null;
+}
+
+// 👉 Intenta sacar un código IATA (2 letras) desde el offer
 export function extractCarrierCode(offer) {
   const out = [];
   const add = (v) => {
@@ -21,18 +55,29 @@ export function extractCarrierCode(offer) {
     })
   );
 
+  // ⛑️ Fallback: si no vino código, intenta por el nombre
+  if (!out.length) {
+    const name =
+      offer?.airlineName ||
+      offer?.carrierName ||
+      offer?.itineraries?.[0]?.segments?.[0]?.carrierName ||
+      null;
+    const byName = codeFromName(name);
+    if (byName) out.push(byName);
+  }
+
   return out[0] || null;
 }
 
-// URL de los CDNs
-const cdn1 = (c, size) => `https://pics.avs.io/${size}/${size}/${c}.png`;
+// CDNs de logos
+const cdn1 = (c, n) => `https://pics.avs.io/${n}/${n}/${c}.png`;
 const cdn2 = (c) => `https://images.kiwi.com/airlines/64/${c}.png`;
 
-// Devuelve el <img> listo para insertar (con fallback)
+// Devuelve el <img> listo para insertar
 export function airlineLogoHTML(code, { size = 44, alt = "Airline" } = {}) {
   const cc = (code || "").toUpperCase().trim();
   if (!cc) {
-    return `<div class="airline-logo-fallback" style="width:${size}px;height:${size}px">${alt[0] ?? "N"}</div>`;
+    return `<div class="airline-logo-fallback" style="width:${size}px;height:${size}px">${(alt||'N')[0]}</div>`;
   }
   return `
     <img
