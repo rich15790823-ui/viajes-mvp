@@ -1,4 +1,7 @@
 ;(()=>{
+
+  import { extractCarrierCode, airlineLogoHTML } from "./js/airlines.js";
+
 // Mapa de aerolíneas (añade las que uses)
 const AIRLINES = {
   "AM": "Aeroméxico",
