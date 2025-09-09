@@ -1,3 +1,4 @@
+import { setupAutocomplete } from "./autocomplete.js";
 
 // load adapter
 ;(()=>{
